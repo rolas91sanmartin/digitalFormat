@@ -1,0 +1,94 @@
+.form-renderer {
+  flex: 1;
+  overflow: auto;
+  padding: 2rem;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  background: #f5f5f5;
+}
+
+.form-canvas {
+  background-color: white;
+  margin: 0 auto;
+}
+
+.static-element {
+  box-sizing: border-box;
+  transition: box-shadow 0.2s, outline 0.2s;
+}
+
+.static-element.selected {
+  outline: 2px solid #667eea !important;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.2);
+  z-index: 100;
+}
+
+.form-field {
+  box-sizing: border-box;
+  transition: box-shadow 0.2s, outline 0.2s;
+}
+
+.form-field.selected {
+  outline: 2px solid #10b981 !important;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.2);
+  z-index: 100;
+}
+
+.form-field input,
+.form-field textarea {
+  box-sizing: border-box;
+  outline: none;
+}
+
+.form-field input:focus,
+.form-field textarea:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+}
+
+.form-table {
+  box-sizing: border-box;
+  transition: box-shadow 0.2s, outline 0.2s;
+}
+
+.form-table.selected {
+  outline: 2px solid #f59e0b !important;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.2);
+  z-index: 100;
+}
+
+.form-table table {
+  background: white;
+}
+
+.form-table input {
+  box-sizing: border-box;
+}
+
+.form-table input:focus {
+  background: #f0f9ff;
+}
+
+/* Scrollbar personalizado */
+.form-renderer::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+.form-renderer::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.form-renderer::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 6px;
+}
+
+.form-renderer::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+

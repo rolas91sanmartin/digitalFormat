@@ -1,0 +1,264 @@
+.form-editor-container {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 2rem;
+}
+
+.editor-header {
+  background: var(--bg-white);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  box-shadow: var(--shadow-xl);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.editor-header h1 {
+  font-size: 1.5rem;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.editor-actions {
+  display: flex;
+  gap: 1rem;
+}
+
+.editor-content {
+  display: grid;
+  grid-template-columns: 350px 1fr;
+  gap: 2rem;
+  height: calc(100vh - 180px);
+}
+
+.editor-sidebar {
+  background: var(--bg-white);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  box-shadow: var(--shadow-xl);
+  overflow-y: auto;
+}
+
+.editor-sidebar h2 {
+  font-size: 1.25rem;
+  color: var(--text-primary);
+  margin-bottom: 1.5rem;
+}
+
+.fields-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.field-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.field-input-group label {
+  font-weight: 500;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.required {
+  color: var(--danger-color);
+  margin-left: 0.25rem;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 0.25rem;
+  transition: background 0.2s;
+}
+
+.checkbox-label:hover {
+  background: var(--bg-gray);
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+}
+
+.editor-preview {
+  background: var(--bg-white);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  box-shadow: var(--shadow-xl);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.editor-preview h2 {
+  font-size: 1.25rem;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #f3f4f6;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+}
+
+.zoom-btn {
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+}
+
+.zoom-btn:hover {
+  background: #667eea;
+  color: white;
+  border-color: #667eea;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.zoom-btn:active {
+  transform: translateY(0);
+}
+
+.zoom-level {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 50px;
+  text-align: center;
+}
+
+.zoom-reset {
+  font-weight: bold;
+}
+
+.preview-wrapper {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 1rem;
+  background: #f5f5f5;
+  border-radius: 0.5rem;
+}
+
+.preview-container {
+  display: inline-block;
+}
+
+.form-canvas {
+  position: relative;
+  border: 1px solid #ccc;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  background-color: white;
+  /* Dimensiones A4 en píxeles (96 DPI) */
+  max-width: 794px;  /* 210mm */
+  max-height: 1123px; /* 297mm */
+  overflow: hidden;
+}
+
+.field-overlay {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0px 4px;
+  overflow: visible;
+  white-space: nowrap;
+  pointer-events: none;
+  line-height: 1;
+  font-weight: 500;
+  z-index: 10;
+}
+
+/* Estilos de impresión para formato A4 */
+@media print {
+  @page {
+    size: A4;
+    margin: 0;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
+  .form-canvas {
+    width: 210mm !important;
+    height: 297mm !important;
+    max-width: none !important;
+    max-height: none !important;
+    box-shadow: none !important;
+    border: none !important;
+    page-break-after: always;
+  }
+
+  .field-overlay {
+    background: transparent !important;
+  }
+}
+
+/* Scrollbar personalizado */
+.editor-sidebar::-webkit-scrollbar,
+.preview-wrapper::-webkit-scrollbar {
+  width: 8px;
+}
+
+.editor-sidebar::-webkit-scrollbar-track,
+.preview-wrapper::-webkit-scrollbar-track {
+  background: var(--bg-gray);
+  border-radius: 4px;
+}
+
+.editor-sidebar::-webkit-scrollbar-thumb,
+.preview-wrapper::-webkit-scrollbar-thumb {
+  background: var(--primary-color);
+  border-radius: 4px;
+}
+
+.editor-sidebar::-webkit-scrollbar-thumb:hover,
+.preview-wrapper::-webkit-scrollbar-thumb:hover {
+  background: var(--secondary-color);
+}
+
+@media (max-width: 1024px) {
+  .editor-content {
+    grid-template-columns: 1fr;
+  }
+  
+  .editor-sidebar {
+    max-height: 400px;
+  }
+}
+
