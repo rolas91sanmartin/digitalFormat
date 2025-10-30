@@ -1,7 +1,7 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "outDir": "./dist/main",
+    "outDir": "./dist/main/main",
     "module": "commonjs",
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true

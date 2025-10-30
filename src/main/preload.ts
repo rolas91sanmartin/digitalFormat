@@ -27,6 +27,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   deleteFormTemplate: (id: string, userId: string) =>
     ipcRenderer.invoke('forms:delete', { id, userId }),
+  
+  importFormTemplate: (userId: string, templateData: any) =>
+    ipcRenderer.invoke('forms:import', { userId, templateData }),
 
   // Printing
   printForm: (htmlContent: string) =>
@@ -53,6 +56,7 @@ export type ElectronAPI = {
   getFormTemplate: (id: string) => Promise<any>;
   updateFormTemplate: (id: string, userId: string, updates: any) => Promise<any>;
   deleteFormTemplate: (id: string, userId: string) => Promise<any>;
+  importFormTemplate: (userId: string, templateData: any) => Promise<any>;
   printForm: (htmlContent: string) => Promise<any>;
   selectFile: () => Promise<{ filePath: string; buffer: ArrayBuffer; type: string } | null>;
   getApiKey: () => Promise<string>;

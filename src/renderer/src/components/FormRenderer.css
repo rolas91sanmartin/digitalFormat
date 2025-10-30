@@ -92,3 +92,40 @@
   background: #555;
 }
 
+/* Estilos para drag and drop */
+.draggable {
+  transition: box-shadow 0.2s;
+}
+
+.draggable:hover {
+  box-shadow: 0 0 8px rgba(102, 126, 234, 0.4);
+}
+
+.draggable:active {
+  cursor: grabbing !important;
+  box-shadow: 0 0 12px rgba(102, 126, 234, 0.6);
+  z-index: 1000;
+}
+
+.table-field {
+  box-sizing: border-box;
+  transition: box-shadow 0.2s, outline 0.2s;
+}
+
+.table-field.selected {
+  outline: 2px solid #f59e0b !important;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.2);
+  z-index: 100;
+}
+
+.table-field input {
+  box-sizing: border-box;
+  outline: none;
+}
+
+.table-field input:focus {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+}
+

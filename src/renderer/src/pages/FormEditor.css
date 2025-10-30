@@ -39,6 +39,64 @@
   padding: 1.5rem;
   box-shadow: var(--shadow-xl);
   overflow-y: auto;
+  position: relative;
+  z-index: 100;
+}
+
+/* Asegurar que los inputs del sidebar siempre sean editables */
+.editor-sidebar input,
+.editor-sidebar textarea,
+.editor-sidebar select {
+  pointer-events: auto !important;
+  cursor: text !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  opacity: 1 !important;
+}
+
+.editor-sidebar input:disabled,
+.editor-sidebar textarea:disabled,
+.editor-sidebar select:disabled {
+  pointer-events: auto !important;
+  cursor: text !important;
+  opacity: 1 !important;
+  background: white !important;
+  color: inherit !important;
+  border: 1px solid var(--border-color) !important;
+  -webkit-text-fill-color: currentcolor !important;
+}
+
+.editor-sidebar table input {
+  pointer-events: auto !important;
+  cursor: text !important;
+  background: white !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  opacity: 1 !important;
+}
+
+.editor-sidebar table input:disabled {
+  pointer-events: auto !important;
+  cursor: text !important;
+  background: white !important;
+  opacity: 1 !important;
+  color: inherit !important;
+  -webkit-text-fill-color: currentcolor !important;
+}
+
+.editor-sidebar .field-input-group input,
+.editor-sidebar .field-input-group textarea {
+  pointer-events: auto !important;
+  cursor: text !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  background: white !important;
+  opacity: 1 !important;
+}
+
+.editor-sidebar table td,
+.editor-sidebar table th {
+  pointer-events: auto !important;
 }
 
 .editor-sidebar h2 {
@@ -196,10 +254,94 @@
   padding: 0px 4px;
   overflow: visible;
   white-space: nowrap;
-  pointer-events: none;
+  pointer-events: auto;
   line-height: 1;
   font-weight: 500;
   z-index: 10;
+}
+
+.field-overlay:hover {
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.field-overlay:active {
+  cursor: grabbing !important;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.5);
+  z-index: 1000;
+}
+
+.field-overlay .resize-handle {
+  opacity: 0.8;
+}
+
+.field-overlay:hover .resize-handle {
+  opacity: 1;
+}
+
+.field-overlay .resize-handle:hover {
+  background-color: #5a67d8 !important;
+  transform: scale(1.15);
+}
+
+.table-cell-field {
+  box-sizing: border-box;
+}
+
+.table-cell-field:hover {
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+}
+
+.table-cell-field:active {
+  cursor: grabbing !important;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.5);
+  z-index: 1000;
+}
+
+/* Estilos para tablas arrastrables completas */
+.form-canvas > div[style*="table"] {
+  transition: box-shadow 0.2s;
+}
+
+.form-canvas > div[style*="table"]:hover {
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3) !important;
+}
+
+.form-canvas > div[style*="table"]:active {
+  cursor: grabbing !important;
+  box-shadow: 0 6px 16px rgba(245, 158, 11, 0.5) !important;
+  z-index: 1000;
+}
+
+/* Resize handles para tablas y celdas */
+.resize-handle {
+  transition: all 0.2s;
+  pointer-events: auto !important;
+}
+
+.resize-handle:hover {
+  transform: scale(1.2);
+  box-shadow: 0 3px 6px rgba(0,0,0,0.3) !important;
+}
+
+.resize-handle:active {
+  transform: scale(1.1);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.4) !important;
+}
+
+/* Estilos para celdas individuales */
+.table-cell {
+  transition: all 0.2s;
+}
+
+.table-cell:hover {
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);
+  z-index: 100;
+}
+
+.table-cell:active {
+  cursor: grabbing !important;
+  box-shadow: 0 4px 10px rgba(16, 185, 129, 0.5);
+  z-index: 1000;
 }
 
 /* Estilos de impresión para formato A4 */
@@ -226,6 +368,33 @@
 
   .field-overlay {
     background: transparent !important;
+    border: none !important;
+  }
+
+  .form-canvas > div[style*="table"] {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .drag-mode-info {
+    display: none !important;
+  }
+
+  .editor-header,
+  .editor-sidebar {
+    display: none !important;
+  }
+
+  .resize-handle {
+    display: none !important;
+  }
+
+  .table-cell {
+    box-shadow: none !important;
+    outline: none !important;
+    border: none !important;
+    background-color: transparent !important;
   }
 }
 
@@ -250,6 +419,33 @@
 .editor-sidebar::-webkit-scrollbar-thumb:hover,
 .preview-wrapper::-webkit-scrollbar-thumb:hover {
   background: var(--secondary-color);
+}
+
+.drag-mode-info {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  z-index: 50;
+  pointer-events: none;
+  padding: 12px 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  font-size: 0.9rem;
+  font-weight: 500;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(100px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 @media (max-width: 1024px) {

@@ -1,0 +1,71 @@
+/* Estilos personalizados para SweetAlert2 */
+.swal2-popup {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  border-radius: 12px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.swal2-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1f2937;
+  padding: 1rem 1.5rem 0.5rem;
+}
+
+.swal2-html-container {
+  font-size: 1rem;
+  color: #6b7280;
+  padding: 0 1.5rem 1rem;
+}
+
+.swal2-icon {
+  border-width: 3px;
+}
+
+.swal2-icon.swal2-warning {
+  border-color: #f59e0b;
+  color: #f59e0b;
+}
+
+.swal2-icon.swal2-error {
+  border-color: #ef4444;
+}
+
+.swal2-icon.swal2-success {
+  border-color: #10b981;
+}
+
+.swal2-icon.swal2-info {
+  border-color: #3b82f6;
+}
+
+.swal2-actions {
+  gap: 0.75rem;
+  padding: 1rem 1.5rem 1.5rem;
+}
+
+.swal2-confirm,
+.swal2-cancel {
+  border-radius: 8px;
+  padding: 0.625rem 1.5rem;
+  font-size: 0.95rem;
+  font-weight: 500;
+  border: none;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  transition: all 0.2s;
+}
+
+.swal2-confirm:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.swal2-cancel:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.swal2-backdrop-show {
+  background: rgba(0, 0, 0, 0.4);
+}
+

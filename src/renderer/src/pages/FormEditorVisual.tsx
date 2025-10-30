@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import FormRenderer from '../components/FormRenderer';
 import PropertiesPanel from '../components/PropertiesPanel';
+import Notification from '../components/Notification';
 import './FormEditorVisual.css';
 
 declare global {
@@ -21,6 +22,8 @@ const FormEditorVisual: React.FC = () => {
   const [selectedElement, setSelectedElement] = useState<{ type: 'static' | 'field' | 'table'; id: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [showPropertiesPanel, setShowPropertiesPanel] = useState(false);
+  const [isDragMode, setIsDragMode] = useState(true); // Modo drag activado por defecto
+  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
 
   useEffect(() => {
     loadTemplate();
@@ -79,6 +82,38 @@ const FormEditorVisual: React.FC = () => {
     });
   };
 
+  const handlePositionChange = (elementType: 'field' | 'static' | 'table', elementId: string, newPosition: { x: number; y: number }) => {
+    setTemplate((prev: any) => {
+      const newTemplate = { ...prev };
+      
+      if (elementType === 'static' && newTemplate.staticElements) {
+        newTemplate.staticElements = prev.staticElements.map((el: any) => 
+          el.id === elementId ? { ...el, position: { ...el.position, x: newPosition.x, y: newPosition.y } } : el
+        );
+      } else if (elementType === 'field' && newTemplate.fields) {
+        newTemplate.fields = prev.fields.map((el: any) => 
+          el.id === elementId ? { ...el, position: { ...el.position, x: newPosition.x, y: newPosition.y } } : el
+        );
+      } else if (elementType === 'table' && newTemplate.tables) {
+        // Para campos de tabla individuales, necesitamos actualizar la tabla completa
+        // El ID del campo es del formato: tableId_columnId_rowIdx
+        const [tableId] = elementId.split('_');
+        newTemplate.tables = prev.tables.map((table: any) => {
+          if (table.id === tableId) {
+            // Actualizar la posición base de la tabla
+            return { 
+              ...table, 
+              position: { ...table.position, x: newPosition.x, y: newPosition.y }
+            };
+          }
+          return table;
+        });
+      }
+      
+      return newTemplate;
+    });
+  };
+
   const handleSave = async () => {
     try {
       setSaving(true);
@@ -96,13 +131,13 @@ const FormEditorVisual: React.FC = () => {
       );
 
       if (result.success) {
-        alert('✅ Cambios guardados correctamente');
+        setNotification({ message: 'Cambios guardados correctamente', type: 'success' });
       } else {
-        alert('❌ Error al guardar: ' + result.error);
+        setNotification({ message: `Error al guardar: ${result.error}`, type: 'error' });
       }
     } catch (err: any) {
       console.error('Error al guardar:', err);
-      alert('❌ Error al guardar los cambios');
+      setNotification({ message: 'Error al guardar los cambios', type: 'error' });
     } finally {
       setSaving(false);
     }
@@ -166,6 +201,16 @@ const FormEditorVisual: React.FC = () => {
             <span className="toggle-label">Mostrar imagen de fondo</span>
           </label>
 
+          <label className="toggle-switch">
+            <input 
+              type="checkbox"
+              checked={isDragMode}
+              onChange={(e) => setIsDragMode(e.target.checked)}
+            />
+            <span className="toggle-slider"></span>
+            <span className="toggle-label">Modo arrastrar</span>
+          </label>
+
           <button 
             className={`btn btn-secondary ${showPropertiesPanel ? 'active' : ''}`}
             onClick={() => setShowPropertiesPanel(!showPropertiesPanel)}
@@ -198,6 +243,8 @@ const FormEditorVisual: React.FC = () => {
           showBackground={showBackground}
           onElementClick={handleElementClick}
           selectedElement={selectedElement}
+          onPositionChange={handlePositionChange}
+          isDragMode={isDragMode}
         />
 
         {showPropertiesPanel && (
@@ -211,12 +258,26 @@ const FormEditorVisual: React.FC = () => {
       </div>
 
       {/* Información flotante */}
-      {selectedElement && (
+      {isDragMode && (
+        <div className="selection-info">
+          🖱️ Modo arrastrar activado - Arrastra los campos para reposicionarlos
+        </div>
+      )}
+      {!isDragMode && selectedElement && (
         <div className="selection-info">
           {selectedElement.type === 'static' && '📝 Elemento estático seleccionado'}
           {selectedElement.type === 'field' && '📋 Campo editable seleccionado'}
-          {selectedElement.type === 'table' && '📊 Tabla seleccionada'}
+          {selectedElement.type === 'table' && '📊 Campo de tabla seleccionado'}
         </div>
+      )}
+
+      {/* Notificación no bloqueante */}
+      {notification && (
+        <Notification
+          message={notification.message}
+          type={notification.type}
+          onClose={() => setNotification(null)}
+        />
       )}
     </div>
   );

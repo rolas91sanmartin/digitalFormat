@@ -110,6 +110,28 @@ export function setupIpcHandlers() {
     }
   });
 
+  ipcMain.handle('forms:import', async (_event, data) => {
+    try {
+      // Crear un nuevo template basado en la configuración importada
+      const templateData = {
+        name: data.templateData.name,
+        description: data.templateData.description,
+        userId: data.userId,
+        backgroundImage: data.templateData.backgroundImage,
+        fields: data.templateData.fields || [],
+        tables: data.templateData.tables || [],
+        staticElements: data.templateData.staticElements || [],
+        pageSize: data.templateData.pageSize || { width: 794, height: 1123 },
+        renderMode: data.templateData.renderMode || 'hybrid' as 'hybrid' | 'html-only' | 'image-overlay'
+      };
+
+      const template = await formTemplateRepository.create(templateData);
+      return { success: true, template };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  });
+
   // File selection handler
   ipcMain.handle('file:select', async () => {
     const result = await dialog.showOpenDialog({
