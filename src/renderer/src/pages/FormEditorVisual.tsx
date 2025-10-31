@@ -143,8 +143,35 @@ const FormEditorVisual: React.FC = () => {
     }
   };
 
-  const handlePrint = () => {
-    window.print();
+  const handlePrint = async () => {
+    // Inyectar una imagen de fondo temporal dentro del canvas para asegurar impresión
+    const prev = showBackground;
+    if (!prev) setShowBackground(true);
+    await new Promise(requestAnimationFrame);
+    const canvas = document.querySelector('.form-canvas') as HTMLElement | null;
+    let injectedImg: HTMLImageElement | null = null;
+    if (canvas && template?.backgroundImage) {
+      injectedImg = document.createElement('img');
+      injectedImg.src = template.backgroundImage;
+      injectedImg.alt = 'bg-print';
+      injectedImg.style.position = 'absolute';
+      injectedImg.style.inset = '0';
+      injectedImg.style.width = '100%';
+      injectedImg.style.height = '100%';
+      injectedImg.style.objectFit = 'contain';
+      injectedImg.style.pointerEvents = 'none';
+      injectedImg.style.zIndex = '0';
+      // Asegurar que el contenedor apile por encima
+      (canvas.style as any).position = canvas.style.position || 'relative';
+      canvas.prepend(injectedImg);
+    }
+    await new Promise(resolve => setTimeout(resolve, 100));
+    try {
+      await window.electronAPI.printWithBackground({ silent: false, landscape: false });
+    } finally {
+      if (injectedImg && injectedImg.parentElement) injectedImg.parentElement.removeChild(injectedImg);
+      if (!prev) setShowBackground(false);
+    }
   };
 
   if (loading) {

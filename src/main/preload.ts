@@ -34,6 +34,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Printing
   printForm: (htmlContent: string) =>
     ipcRenderer.invoke('print:form', htmlContent),
+  printWithBackground: (options?: any) =>
+    ipcRenderer.invoke('print:current', options),
 
   // File operations
   selectFile: () =>
@@ -58,6 +60,7 @@ export type ElectronAPI = {
   deleteFormTemplate: (id: string, userId: string) => Promise<any>;
   importFormTemplate: (userId: string, templateData: any) => Promise<any>;
   printForm: (htmlContent: string) => Promise<any>;
+  printWithBackground: (options?: any) => Promise<any>;
   selectFile: () => Promise<{ filePath: string; buffer: ArrayBuffer; type: string } | null>;
   getApiKey: () => Promise<string>;
   setApiKey: (apiKey: string) => Promise<void>;

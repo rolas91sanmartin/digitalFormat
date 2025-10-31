@@ -2,7 +2,7 @@
   "name": "format-printer-ia",
   "version": "1.0.0",
   "description": "Aplicación para reconocer y recrear formularios de documentos con IA",
-  "main": "dist/main/main/main.js",
+  "main": "dist/main/main/main/main.js",
   "scripts": {
     "start": "electron .",
     "dev": "concurrently \"npm run dev:renderer\" \"wait-on http://localhost:5173 && npm run dev:main\"",

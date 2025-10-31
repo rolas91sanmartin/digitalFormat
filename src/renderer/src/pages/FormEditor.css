@@ -344,31 +344,187 @@
   z-index: 1000;
 }
 
-/* Estilos de impresión para formato A4 */
+/* Estilos de impresión para formato Carta (Letter) */
 @media print {
   @page {
-    size: A4;
+    size: letter;
     margin: 0;
+    /* Prevenir espacios en blanco innecesarios */
+    marks: none;
+  }
+  
+  /* Asegurar que no haya contenido invisible antes del canvas */
+  body > *:first-child {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
   }
 
-  body {
-    margin: 0;
-    padding: 0;
+  /* Forzar impresión de fondos y colores */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    width: fit-content !important;
+    height: fit-content !important;
+    background: white !important;
+    /* Forzar que el contenido empiece en la parte superior */
+    position: relative !important;
+  }
+
+  /* Ocultar el fondo de la app */
+  body::before,
+  body::after,
+  #root::before,
+  #root::after {
+    display: none !important;
+  }
+
+  #root {
+    background: white !important;
+    width: fit-content !important;
+    height: fit-content !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    /* Forzar que el contenido empiece en la parte superior */
+    position: relative !important;
+  }
+
+  /* Ocultar TODO excepto el canvas del formulario */
+  .editor-header,
+  .editor-sidebar,
+  .drag-mode-info,
+  .resize-handle,
+  .notification,
+  button,
+  .toolbar,
+  nav,
+  header,
+  footer,
+  .preview-header,
+  .zoom-controls {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* Contenedor principal solo muestra el canvas */
+  .editor-container {
+    display: block !important;
+    width: fit-content !important;
+    height: fit-content !important;
+    overflow: visible !important;
+    background: white !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    /* Forzar posición al inicio de la página */
+    position: relative !important;
+    top: 0 !important;
+    left: 0 !important;
+  }
+
+  .editor-preview {
+    display: block !important;
+    width: fit-content !important;
+    height: fit-content !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: white !important;
+    /* Forzar posición al inicio de la página */
+    position: relative !important;
+    top: 0 !important;
+    left: 0 !important;
+  }
+
+  .preview-wrapper {
+    display: block !important;
+    width: fit-content !important;
+    height: fit-content !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: white !important;
+    transform: none !important;
+    box-shadow: none !important;
+    /* Forzar posición al inicio de la página */
+    position: relative !important;
+    top: 0 !important;
+    left: 0 !important;
+  }
+  
+  .preview-container {
+    display: block !important;
+    /* Forzar posición al inicio de la página */
+    position: relative !important;
+    top: 0 !important;
+    left: 0 !important;
+    transform: none !important;
+    scale: 1 !important;
+    transform-origin: top left !important;
+  }
+
+  /* Forzar todos los divs a fondo blanco o transparente */
+  div {
+    background: inherit !important;
   }
 
   .form-canvas {
-    width: 210mm !important;
-    height: 297mm !important;
-    max-width: none !important;
-    max-height: none !important;
+    /* Mantener el tamaño exacto del documento en píxeles - NO forzar a pulgadas */
+    display: block !important;
+    /* NO especificar width/height aquí - se mantienen desde los estilos inline en píxeles */
     box-shadow: none !important;
     border: none !important;
-    page-break-after: always;
+    background-size: contain !important;
+    background-repeat: no-repeat !important;
+    background-position: top left !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    position: relative !important;
+    /* Forzar que el canvas empiece en la primera página sin espacio antes */
+    page-break-before: auto !important;
+    page-break-after: avoid !important;
+    page-break-inside: avoid !important;
+    /* Forzar posición al inicio de la página */
+    top: 0 !important;
+    left: 0 !important;
+    transform: none !important;
+    transform-origin: top left !important;
+    /* Asegurar que no haya escalado */
+    zoom: 1 !important;
+    -webkit-zoom: 1 !important;
+  }
+  
+  .form-canvas img {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain !important;
+    object-position: top left !important;
+    transform: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  
+  .preview-container {
+    transform: none !important;
+    scale: 1 !important;
+    transform-origin: top left !important;
   }
 
   .field-overlay {
     background: transparent !important;
     border: none !important;
+    position: absolute !important;
+    transform: none !important;
+    transform-origin: top left !important;
+    box-sizing: border-box !important;
+    /* NO cambiar left/top - se mantienen desde estilos inline en píxeles */
   }
 
   .form-canvas > div[style*="table"] {
@@ -377,24 +533,24 @@
     box-shadow: none !important;
   }
 
-  .drag-mode-info {
-    display: none !important;
-  }
-
-  .editor-header,
-  .editor-sidebar {
-    display: none !important;
-  }
-
-  .resize-handle {
-    display: none !important;
-  }
-
   .table-cell {
     box-shadow: none !important;
     outline: none !important;
     border: none !important;
     background-color: transparent !important;
+    position: absolute !important;
+    transform: none !important;
+    transform-origin: top left !important;
+    box-sizing: border-box !important;
+    /* NO cambiar left/top - se mantienen desde estilos inline en píxeles */
+  }
+
+  /* Ocultar bordes de inputs y elementos interactivos */
+  input, textarea, select {
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
   }
 }
 
@@ -448,13 +604,64 @@
   }
 }
 
+/* Responsive Design */
+@media (max-width: 1200px) {
+  .editor-header {
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+  
+  .editor-actions {
+    width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+}
+
 @media (max-width: 1024px) {
   .editor-content {
     grid-template-columns: 1fr;
+    gap: 1rem;
   }
   
   .editor-sidebar {
+    max-height: 500px;
+    margin-bottom: 1rem;
+  }
+  
+  .form-editor-container {
+    padding: 1rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .editor-header h1 {
+    font-size: 1.25rem;
+  }
+  
+  .editor-actions {
+    gap: 0.5rem;
+  }
+  
+  .editor-actions button {
+    font-size: 0.85rem;
+    padding: 0.5rem 0.75rem;
+  }
+  
+  .editor-sidebar {
+    padding: 1rem;
     max-height: 400px;
+  }
+  
+  .editor-sidebar h2 {
+    font-size: 1.1rem;
+  }
+  
+  .drag-mode-info {
+    font-size: 0.8rem;
+    padding: 8px 12px;
+    bottom: 10px;
+    right: 10px;
   }
 }
 

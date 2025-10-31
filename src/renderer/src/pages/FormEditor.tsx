@@ -72,7 +72,7 @@ const FormEditor: React.FC = () => {
   
   // Estados para drag and drop
   const [isDragMode, setIsDragMode] = useState(false);
-  const [draggingElement, setDraggingElement] = useState<{ type: 'field' | 'table' | 'cell'; id: string } | null>(null);
+  const [draggingElement, setDraggingElement] = useState<{ type: 'field' | 'table' | 'cell' | 'custom'; id: string } | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [saving, setSaving] = useState(false);
   
@@ -84,6 +84,12 @@ const FormEditor: React.FC = () => {
   
   // Estado para notificaciones no bloqueantes
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
+  
+  // Estado para celdas eliminadas (cellId -> boolean)
+  const [deletedCells, setDeletedCells] = useState<Record<string, boolean>>({});
+  
+  // Estado para campos personalizados agregados manualmente
+  const [customFields, setCustomFields] = useState<FormField[]>([]);
 
   useEffect(() => {
     loadTemplate();
@@ -319,21 +325,107 @@ const FormEditor: React.FC = () => {
     });
   };
 
+  // Función para eliminar una celda individual
+  const handleDeleteCell = async (cellId: string) => {
+    const result = await Swal.fire({
+      title: '¿Estás seguro?',
+      text: '¿Deseas eliminar esta celda?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#6b7280',
+      confirmButtonText: 'Sí, eliminar',
+      cancelButtonText: 'Cancelar'
+    });
+
+    if (!result.isConfirmed) return;
+    
+    setDeletedCells((prev) => ({
+      ...prev,
+      [cellId]: true
+    }));
+    
+    setNotification({ message: 'Celda eliminada correctamente', type: 'success' });
+  };
+
+  // Función para agregar un campo personalizado
+  const handleAddCustomField = () => {
+    const newField: FormField = {
+      id: `custom_field_${Date.now()}`,
+      name: 'Nuevo Campo',
+      type: 'text',
+      position: {
+        x: 100,
+        y: 100,
+        width: 200,
+        height: 30
+      },
+      required: false,
+      placeholder: 'Escribe aquí...'
+    };
+    
+    setCustomFields((prev) => [...prev, newField]);
+    setNotification({ message: 'Campo agregado. Puedes arrastrarlo y editarlo.', type: 'success' });
+  };
+
+  // Función para eliminar un campo personalizado
+  const handleDeleteCustomField = async (fieldId: string) => {
+    const result = await Swal.fire({
+      title: '¿Estás seguro?',
+      text: '¿Deseas eliminar este campo personalizado?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#6b7280',
+      confirmButtonText: 'Sí, eliminar',
+      cancelButtonText: 'Cancelar'
+    });
+
+    if (!result.isConfirmed) return;
+    
+    setCustomFields((prev) => prev.filter(f => f.id !== fieldId));
+    setNotification({ message: 'Campo eliminado correctamente', type: 'success' });
+  };
+
+  // Función para actualizar la posición de un campo personalizado
+  const handleUpdateCustomFieldPosition = (fieldId: string, newPosition: { x: number; y: number }) => {
+    setCustomFields((prev) =>
+      prev.map((field) =>
+        field.id === fieldId
+          ? { ...field, position: { ...field.position, x: newPosition.x, y: newPosition.y } }
+          : field
+      )
+    );
+  };
+
   const handlePrint = async () => {
     if (!template || !formRef.current) return;
 
     try {
       setPrinting(true);
-
-      // Generar HTML del formulario con los valores
-      const printHtml = generatePrintHtml();
-
-      const result = await window.electronAPI.printForm(printHtml);
+      
+      // Desactivar modo drag antes de imprimir
+      const wasDragMode = isDragMode;
+      if (wasDragMode) setIsDragMode(false);
+      
+      // Esperar un frame para que se aplique el cambio
+      await new Promise(requestAnimationFrame);
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Imprimir la vista actual con fondo
+      const result = await window.electronAPI.printWithBackground({ 
+        silent: false, 
+        landscape: false 
+      });
+      
       if (!result.success) {
-        setError(result.error);
+        setNotification({ message: `Error al imprimir: ${result.error}`, type: 'error' });
       }
+      
+      // Restaurar modo drag si estaba activo
+      if (wasDragMode) setIsDragMode(true);
     } catch (err: any) {
-      setError(err.message);
+      setNotification({ message: `Error al imprimir: ${err.message}`, type: 'error' });
     } finally {
       setPrinting(false);
     }
@@ -527,7 +619,7 @@ const FormEditor: React.FC = () => {
         newHeight = Math.max(20, resizingTable.startHeight + deltaY / scale);
       }
       
-      // Verificar si es una celda, un campo o una tabla
+      // Verificar si es una celda, un campo personalizado, un campo normal o una tabla
       if (cellPositions[resizingTable.id]) {
         // Es una celda
         setCellPositions(prev => ({
@@ -538,6 +630,21 @@ const FormEditor: React.FC = () => {
             height: newHeight
           }
         }));
+      } else if (customFields.some(f => f.id === resizingTable.id)) {
+        // Es un campo personalizado
+        setCustomFields(prev =>
+          prev.map(field =>
+            field.id === resizingTable.id
+              ? { 
+                  ...field, 
+                  position: { 
+                    ...field.position, 
+                    width: newWidth
+                  } 
+                }
+              : field
+          )
+        );
       } else {
         // Verificar si es un campo normal
         const isField = template.fields?.some(f => f.id === resizingTable.id);
@@ -629,6 +736,9 @@ const FormEditor: React.FC = () => {
           y: newY
         }
       }));
+    } else if (draggingElement.type === 'custom') {
+      // Mover campo personalizado
+      handleUpdateCustomFieldPosition(draggingElement.id, { x: newX, y: newY });
     }
   };
 
@@ -638,11 +748,24 @@ const FormEditor: React.FC = () => {
   };
 
   // Funciones para resize de tablas, celdas y campos
-  const handleResizeStart = (e: React.MouseEvent, elementId: string, direction: 'e' | 's' | 'se', isCell: boolean = false, isField: boolean = false) => {
+  const handleResizeStart = (e: React.MouseEvent, elementId: string, direction: 'e' | 's' | 'se', isCell: boolean = false, isField: boolean = false, isCustom: boolean = false) => {
     e.preventDefault();
     e.stopPropagation();
     
-    if (isField) {
+    if (isCustom) {
+      // Resize de campo personalizado
+      const field = customFields.find(f => f.id === elementId);
+      if (!field) return;
+      
+      setResizingTable({
+        id: elementId,
+        direction,
+        startX: e.clientX,
+        startY: e.clientY,
+        startWidth: field.position.width,
+        startHeight: field.position.height
+      });
+    } else if (isField) {
       // Resize de campo normal
       if (!template) return;
       const field = template.fields?.find(f => f.id === elementId);
@@ -799,6 +922,26 @@ const FormEditor: React.FC = () => {
           onClick={(e) => e.stopPropagation()}
         >
           <h2>Campos del Formulario</h2>
+          
+          {/* Botón para agregar campos personalizados */}
+          <button 
+            className="btn btn-primary" 
+            onClick={handleAddCustomField} 
+            style={{
+              width: '100%',
+              marginBottom: '1.5rem',
+              padding: '0.75rem',
+              fontSize: '0.95rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem'
+            }}
+            title="Agregar un campo personalizado al formulario"
+          >
+            ➕ Agregar Campo Personalizado
+          </button>
+
           <div className="fields-list">
             {template.fields?.map((field) => (
               <div key={field.id} className="field-input-group">
@@ -851,9 +994,41 @@ const FormEditor: React.FC = () => {
               </div>
             ))}
 
+            {/* Campos Personalizados - ANTES de las tablas */}
+            {customFields.length > 0 && (
+              <>
+                <h3 style={{ marginTop: '2rem', marginBottom: '1rem', color: '#10b981' }}>
+                  📝 Campos Personalizados
+                </h3>
+                {customFields.map((field) => (
+                  <div key={field.id} className="field-input-group">
+                    <label style={{ color: '#10b981', fontWeight: '600' }}>
+                      {field.name}
+                    </label>
+                    <input
+                      type="text"
+                      className="input"
+                      value={fieldValues[field.id] || ''}
+                      onChange={(e) => handleFieldChange(field.id, e.target.value)}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={(e) => e.stopPropagation()}
+                      onFocus={(e) => e.stopPropagation()}
+                      placeholder={field.placeholder}
+                      disabled={false}
+                      readOnly={false}
+                      style={{ 
+                        borderColor: '#10b981',
+                        borderWidth: '2px'
+                      }}
+                    />
+                  </div>
+                ))}
+              </>
+            )}
+
             {template.tables && template.tables.length > 0 && (
               <>
-                <h3 style={{ marginTop: '2rem', marginBottom: '1rem' }}>Tablas</h3>
+                <h3 style={{ marginTop: '2rem', marginBottom: '1rem' }}>📊 Tablas</h3>
                 {template.tables.map((table) => (
                   <div 
                     key={table.id} 
@@ -1130,7 +1305,8 @@ const FormEditor: React.FC = () => {
                     const cellId = `${table.id}_${col.id}_row${rowIdx}`;
                     const cellPos = cellPositions[cellId];
                     
-                    if (!cellPos) return;
+                    // No renderizar celdas eliminadas o sin posición
+                    if (!cellPos || deletedCells[cellId]) return;
                     
                     cells.push(
                       <div
@@ -1226,6 +1402,37 @@ const FormEditor: React.FC = () => {
                                 boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
                               }}
                             />
+                            
+                            {/* Botón para eliminar celda */}
+                            <button
+                              className="delete-cell-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteCell(cellId);
+                              }}
+                              style={{
+                                position: 'absolute',
+                                top: '-8px',
+                                right: '-8px',
+                                width: '18px',
+                                height: '18px',
+                                backgroundColor: '#ef4444',
+                                color: 'white',
+                                border: '1px solid white',
+                                borderRadius: '50%',
+                                cursor: 'pointer',
+                                fontSize: '10px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                zIndex: 1003,
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                                padding: 0
+                              }}
+                              title="Eliminar celda"
+                            >
+                              ✕
+                            </button>
                           </>
                         )}
                       </div>
@@ -1234,6 +1441,96 @@ const FormEditor: React.FC = () => {
                 });
                 
                 return cells;
+              })}
+
+              {/* Renderizar campos personalizados */}
+              {customFields.map((field) => {
+                const value = fieldValues[field.id];
+                return (
+                  <div
+                    key={field.id}
+                    className="field-overlay custom-field"
+                    style={{
+                      left: `${field.position.x}px`,
+                      top: `${field.position.y}px`,
+                      width: `${field.position.width}px`,
+                      height: `${field.position.height}px`,
+                      fontSize: `${field.fontSize || 12}px`,
+                      fontFamily: field.fontFamily || 'Arial',
+                      color: field.color || '#000000',
+                      cursor: isDragMode ? 'grab' : 'default',
+                      userSelect: isDragMode ? 'none' : 'auto',
+                      border: isDragMode ? '2px dashed #10b981' : 'none',
+                      backgroundColor: isDragMode ? 'rgba(16, 185, 129, 0.1)' : 'transparent',
+                      transition: 'background-color 0.2s, border 0.2s',
+                      position: 'absolute'
+                    }}
+                    onMouseDown={(e) => {
+                      const target = e.target as HTMLElement;
+                      if (!target.classList.contains('resize-handle') && !target.classList.contains('delete-field-btn')) {
+                        handleMouseDown(e, 'custom', field.id, field.position.x, field.position.y);
+                      }
+                    }}
+                  >
+                    {value || field.placeholder || ''}
+                    
+                    {/* Resize handle y botón eliminar solo en modo drag */}
+                    {isDragMode && (
+                      <>
+                        <div
+                          className="resize-handle resize-e"
+                          onMouseDown={(e) => handleResizeStart(e, field.id, 'e', false, false, true)}
+                          style={{
+                            position: 'absolute',
+                            right: '-4px',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            width: '8px',
+                            height: '24px',
+                            backgroundColor: '#10b981',
+                            border: '1px solid white',
+                            borderRadius: '4px',
+                            cursor: 'ew-resize',
+                            zIndex: 1002,
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                          }}
+                        />
+                        
+                        {/* Botón para eliminar campo personalizado */}
+                        <button
+                          className="delete-field-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteCustomField(field.id);
+                          }}
+                          style={{
+                            position: 'absolute',
+                            top: '-10px',
+                            right: '-10px',
+                            width: '20px',
+                            height: '20px',
+                            backgroundColor: '#ef4444',
+                            color: 'white',
+                            border: '2px solid white',
+                            borderRadius: '50%',
+                            cursor: 'pointer',
+                            fontSize: '11px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            zIndex: 1003,
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                            padding: 0,
+                            fontWeight: 'bold'
+                          }}
+                          title="Eliminar campo"
+                        >
+                          ✕
+                        </button>
+                      </>
+                    )}
+                  </div>
+                );
               })}
               </div>
             </div>

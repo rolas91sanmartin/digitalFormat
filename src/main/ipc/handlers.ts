@@ -176,6 +176,31 @@ export function setupIpcHandlers() {
     }
   });
 
+  // Print actual contenido visible con fondos por Chromium
+  ipcMain.handle('print:current', async (event, options) => {
+    try {
+      const sender = BrowserWindow.fromWebContents(event.sender);
+      if (!sender) {
+        return { success: false, error: 'No se encontró la ventana emisora' };
+      }
+      const printOptions = {
+        silent: false,
+        printBackground: true,
+        margins: { marginType: 'none' },
+        landscape: false,
+        ...options,
+      } as Electron.WebContentsPrintOptions;
+      return await new Promise((resolve) => {
+        sender.webContents.print(printOptions, (success, failureReason) => {
+          if (success) resolve({ success: true });
+          else resolve({ success: false, error: failureReason || 'Error al imprimir' });
+        });
+      });
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  });
+
   // Settings handlers
   ipcMain.handle('settings:getApiKey', async () => {
     return openaiApiKey;
