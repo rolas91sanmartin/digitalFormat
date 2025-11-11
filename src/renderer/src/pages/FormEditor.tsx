@@ -141,11 +141,32 @@ const FormEditor: React.FC = () => {
       setLoading(true);
       const result = await window.electronAPI.getFormTemplateById(id);
       if (result.success) {
-        setTemplate(result.template);
+        // Separar campos originales de campos personalizados
+        const allFields = result.template.fields || [];
+        const originalFields: FormField[] = [];
+        const personalizedFields: FormField[] = [];
         
-        // Inicializar valores de campos
+        allFields.forEach((field: FormField) => {
+          // Los campos personalizados tienen IDs que empiezan con 'custom_field_'
+          if (field.id.startsWith('custom_field_')) {
+            personalizedFields.push(field);
+          } else {
+            originalFields.push(field);
+          }
+        });
+        
+        // Actualizar el template solo con los campos originales
+        setTemplate({
+          ...result.template,
+          fields: originalFields
+        });
+        
+        // Cargar los campos personalizados en el estado separado
+        setCustomFields(personalizedFields);
+        
+        // Inicializar valores de TODOS los campos (originales + personalizados)
         const initialValues: Record<string, any> = {};
-        result.template.fields?.forEach((field: FormField) => {
+        allFields.forEach((field: FormField) => {
           initialValues[field.id] = field.type === 'checkbox' ? false : '';
         });
         setFieldValues(initialValues);
@@ -536,6 +557,21 @@ const FormEditor: React.FC = () => {
               </div>
             `;
           }).join('')}
+          ${customFields.map(field => {
+            const value = fieldValues[field.id];
+            return `
+              <div class="field-value" style="
+                left: ${field.position.x}px;
+                top: ${field.position.y}px;
+                width: ${field.position.width}px;
+                height: ${field.position.height}px;
+                font-size: ${field.fontSize || 12}px;
+                color: ${field.color || '#000000'};
+              ">
+                ${value || ''}
+              </div>
+            `;
+          }).join('')}
           ${cellsHtml}
         </div>
       </body>
@@ -557,9 +593,12 @@ const FormEditor: React.FC = () => {
 
     if (!result.isConfirmed) return;
     
-    // Limpiar campos normales
+    // Limpiar campos normales y personalizados
     const initialValues: Record<string, any> = {};
     template?.fields?.forEach((field) => {
+      initialValues[field.id] = field.type === 'checkbox' ? false : '';
+    });
+    customFields.forEach((field) => {
       initialValues[field.id] = field.type === 'checkbox' ? false : '';
     });
     setFieldValues(initialValues);
@@ -831,18 +870,21 @@ const FormEditor: React.FC = () => {
         savedRows: tableValues[table.id] || []
       }));
       
+      // Fusionar los campos originales del template con los campos personalizados agregados
+      const allFields = [...(template.fields || []), ...customFields];
+      
       const result = await window.electronAPI.updateFormTemplate(
         template.id,
         user.id,
         {
-          fields: template.fields,
+          fields: allFields,
           tables: updatedTables,
           pageSize: template.pageSize
         }
       );
 
       if (result.success) {
-        setNotification({ message: '✅ Posiciones guardadas correctamente', type: 'success' });
+        setNotification({ message: '✅ Posiciones guardadas correctamente (incluyendo campos personalizados)', type: 'success' });
       } else {
         setNotification({ message: '❌ Error al guardar: ' + result.error, type: 'error' });
       }

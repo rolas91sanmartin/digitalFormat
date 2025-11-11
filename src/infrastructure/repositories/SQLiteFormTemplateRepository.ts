@@ -104,21 +104,27 @@ export class SQLiteFormTemplateRepository implements IFormTemplateRepository {
       updates.push('description = ?');
       values.push(templateData.description);
     }
-    if (templateData.staticElements) {
+    if (templateData.staticElements !== undefined) {
       updates.push('staticElements = ?');
       values.push(JSON.stringify(templateData.staticElements));
     }
-    if (templateData.fields) {
+    if (templateData.fields !== undefined) {
       updates.push('fields = ?');
       values.push(JSON.stringify(templateData.fields));
     }
-    if (templateData.tables) {
+    if (templateData.tables !== undefined) {
       updates.push('tables = ?');
       values.push(JSON.stringify(templateData.tables));
     }
     if (templateData.renderMode) {
       updates.push('renderMode = ?');
       values.push(templateData.renderMode);
+    }
+    if (templateData.pageSize) {
+      updates.push('pageWidth = ?');
+      updates.push('pageHeight = ?');
+      values.push(templateData.pageSize.width);
+      values.push(templateData.pageSize.height);
     }
 
     updates.push('updatedAt = ?');
