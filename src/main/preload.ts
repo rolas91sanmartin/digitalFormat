@@ -8,6 +8,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   login: (email: string, password: string) => 
     ipcRenderer.invoke('auth:login', { email, password }),
+  
+  requestPasswordReset: (email: string) =>
+    ipcRenderer.invoke('auth:requestPasswordReset', { email }),
+  
+  verifyResetCode: (email: string, code: string) =>
+    ipcRenderer.invoke('auth:verifyResetCode', { email, code }),
+  
+  resetPassword: (email: string, code: string, newPassword: string) =>
+    ipcRenderer.invoke('auth:resetPassword', { email, code, newPassword }),
 
   // Form Templates
   createFormTemplate: (name: string, description: string, userId: string, fileBuffer: ArrayBuffer, fileType: string) =>
@@ -30,6 +39,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   importFormTemplate: (userId: string, templateData: any) =>
     ipcRenderer.invoke('forms:import', { userId, templateData }),
+  
+  submitForm: (templateId: string, userId: string, values: Record<string, any>) =>
+    ipcRenderer.invoke('forms:submit', { templateId, userId, values }),
+  
+  getSubmittedForms: (userId: string) =>
+    ipcRenderer.invoke('forms:getSubmittedForms', userId),
+  
+  getSubmittedFormsByTemplate: (templateId: string) =>
+    ipcRenderer.invoke('forms:getSubmittedFormsByTemplate', templateId),
+  
+  retryFormSubmission: (submittedFormId: string) =>
+    ipcRenderer.invoke('forms:retrySubmission', submittedFormId),
+  
+  getNextSequenceNumber: (templateId: string) =>
+    ipcRenderer.invoke('forms:getNextSequenceNumber', templateId),
 
   // Printing
   printForm: (htmlContent: string) =>
@@ -52,6 +76,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
 export type ElectronAPI = {
   register: (username: string, email: string, password: string) => Promise<any>;
   login: (email: string, password: string) => Promise<any>;
+  requestPasswordReset: (email: string) => Promise<any>;
+  verifyResetCode: (email: string, code: string) => Promise<any>;
+  resetPassword: (email: string, code: string, newPassword: string) => Promise<any>;
   createFormTemplate: (name: string, description: string, userId: string, fileBuffer: ArrayBuffer, fileType: string) => Promise<any>;
   getUserFormTemplates: (userId: string) => Promise<any>;
   getFormTemplateById: (id: string) => Promise<any>;
@@ -59,6 +86,11 @@ export type ElectronAPI = {
   updateFormTemplate: (id: string, userId: string, updates: any) => Promise<any>;
   deleteFormTemplate: (id: string, userId: string) => Promise<any>;
   importFormTemplate: (userId: string, templateData: any) => Promise<any>;
+  submitForm: (templateId: string, userId: string, values: Record<string, any>) => Promise<any>;
+  getSubmittedForms: (userId: string) => Promise<any>;
+  getSubmittedFormsByTemplate: (templateId: string) => Promise<any>;
+  retryFormSubmission: (submittedFormId: string) => Promise<any>;
+  getNextSequenceNumber: (templateId: string) => Promise<any>;
   printForm: (htmlContent: string) => Promise<any>;
   printWithBackground: (options?: any) => Promise<any>;
   selectFile: () => Promise<{ filePath: string; buffer: ArrayBuffer; type: string } | null>;

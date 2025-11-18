@@ -1,6 +1,9 @@
 export interface ElectronAPI {
   register: (username: string, email: string, password: string) => Promise<any>;
   login: (email: string, password: string) => Promise<any>;
+  requestPasswordReset: (email: string) => Promise<any>;
+  verifyResetCode: (email: string, code: string) => Promise<any>;
+  resetPassword: (email: string, code: string, newPassword: string) => Promise<any>;
   createFormTemplate: (name: string, description: string | undefined, userId: string, fileBuffer: ArrayBuffer, fileType: string) => Promise<any>;
   getUserFormTemplates: (userId: string) => Promise<any>;
   getFormTemplateById: (id: string) => Promise<any>;

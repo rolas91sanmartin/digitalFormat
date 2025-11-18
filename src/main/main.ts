@@ -26,19 +26,46 @@ log(`userData: ${app.getPath('userData')}`);
 log(`appPath: ${app.getAppPath()}`);
 log(`isPackaged: ${app.isPackaged}`);
 
-function createWindow() {
+async function waitForServer(url: string, maxAttempts = 30): Promise<boolean> {
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      const http = require('http');
+      await new Promise<void>((resolve, reject) => {
+        http.get(url, (res: any) => {
+          if (res.statusCode === 200) {
+            resolve();
+          } else {
+            reject();
+          }
+        }).on('error', reject);
+      });
+      log(`✓ Servidor disponible en ${url}`);
+      return true;
+    } catch {
+      log(`Esperando servidor... intento ${i + 1}/${maxAttempts}`);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
+  return false;
+}
+
+async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1500,
     height: 1000,
-    resizable: false,
+    resizable: true, // Permitir redimensionar y maximizar
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js')
     },
     autoHideMenuBar: true,
-    title: 'FormatPrinter IA - By rsanchez@sanmartin.com.ni'
+    title: 'FormatPrinter IA - By rsanchez@sanmartin.com.ni',
+    show: false // No mostrar hasta que esté cargada
   });
+
+  // Maximizar la ventana
+  mainWindow.maximize();
 
   const isDev = process.argv.includes('--dev');
 
@@ -46,9 +73,18 @@ function createWindow() {
 
   // En desarrollo, cargar desde el servidor de Vite y abrir DevTools
   if (!app.isPackaged && isDev) {
-    log('Cargando desde servidor de desarrollo (http://localhost:5173)');
-    mainWindow.loadURL('http://localhost:5173');
-    mainWindow.webContents.openDevTools({ mode: 'detach' });
+    log('Esperando a que el servidor de desarrollo esté listo...');
+    const serverReady = await waitForServer('http://localhost:5173');
+    
+    if (serverReady) {
+      log('Cargando desde servidor de desarrollo (http://localhost:5173)');
+      await mainWindow.loadURL('http://localhost:5173');
+      mainWindow.show(); // Mostrar solo cuando esté cargada
+      mainWindow.webContents.openDevTools({ mode: 'detach' });
+    } else {
+      log('ERROR: No se pudo conectar al servidor de desarrollo');
+      mainWindow.show();
+    }
   } else {
     // En producción, cargar el HTML compilado SIN abrir DevTools
     const htmlPath = path.join(__dirname, '../../renderer/index.html');
@@ -57,9 +93,10 @@ function createWindow() {
     log(`Archivo existe: ${fs.existsSync(htmlPath)}`);
 
     if (fs.existsSync(htmlPath)) {
-      mainWindow.loadFile(htmlPath).catch(err => {
+      await mainWindow.loadFile(htmlPath).catch(err => {
         log(`ERROR al cargar archivo: ${err}`);
       });
+      mainWindow.show();
     } else {
       log('ERROR: El archivo index.html no existe en la ruta especificada');
 
@@ -74,7 +111,8 @@ function createWindow() {
         log(`Intentando ruta alternativa: ${altPath}`);
         if (fs.existsSync(altPath)) {
           log(`✓ Encontrado en: ${altPath}`);
-          mainWindow.loadFile(altPath);
+          await mainWindow.loadFile(altPath);
+          mainWindow.show();
           break;
         }
       }
@@ -111,7 +149,7 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   log('✓ App ready');
 
   try {
@@ -135,17 +173,17 @@ app.whenReady().then(() => {
 
   try {
     log('Creando ventana...');
-    createWindow();
+    await createWindow();
     log('✓ Ventana creada');
   } catch (err: any) {
     log(`ERROR creando ventana: ${err.message}`);
     log(`Stack: ${err.stack}`);
   }
 
-  app.on('activate', () => {
+  app.on('activate', async () => {
     log('Evento activate');
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+      await createWindow();
     }
   });
 }).catch(err => {

@@ -78,6 +78,11 @@ const Login: React.FC = () => {
 
         <div className="auth-footer">
           <p>
+            <Link to="/forgot-password" className="auth-link">
+              ¿Olvidaste tu contraseña?
+            </Link>
+          </p>
+          <p>
             ¿No tienes una cuenta?{' '}
             <Link to="/register" className="auth-link">
               Regístrate aquí

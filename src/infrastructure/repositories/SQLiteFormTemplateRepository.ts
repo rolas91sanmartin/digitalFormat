@@ -14,9 +14,10 @@ export class SQLiteFormTemplateRepository implements IFormTemplateRepository {
       INSERT INTO form_templates (
         id, name, description, userId, backgroundImage, 
         staticElements, fields, tables, renderMode,
-        pageWidth, pageHeight, createdAt, updatedAt
+        pageWidth, pageHeight, apiConfiguration, numerationConfig, fieldMappings, tableMappings,
+        createdAt, updatedAt
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -31,6 +32,10 @@ export class SQLiteFormTemplateRepository implements IFormTemplateRepository {
       templateData.renderMode || 'hybrid',
       templateData.pageSize.width,
       templateData.pageSize.height,
+      templateData.apiConfiguration ? JSON.stringify(templateData.apiConfiguration) : null,
+      templateData.numerationConfig ? JSON.stringify(templateData.numerationConfig) : null,
+      templateData.fieldMappings ? JSON.stringify(templateData.fieldMappings) : null,
+      templateData.tableMappings ? JSON.stringify(templateData.tableMappings) : null,
       now,
       now
     );
@@ -63,6 +68,10 @@ export class SQLiteFormTemplateRepository implements IFormTemplateRepository {
         width: row.pageWidth,
         height: row.pageHeight
       },
+      apiConfiguration: row.apiConfiguration ? JSON.parse(row.apiConfiguration) : undefined,
+      numerationConfig: row.numerationConfig ? JSON.parse(row.numerationConfig) : undefined,
+      fieldMappings: row.fieldMappings ? JSON.parse(row.fieldMappings) : undefined,
+      tableMappings: row.tableMappings ? JSON.parse(row.tableMappings) : undefined,
       createdAt: new Date(row.createdAt),
       updatedAt: new Date(row.updatedAt)
     };
@@ -86,6 +95,10 @@ export class SQLiteFormTemplateRepository implements IFormTemplateRepository {
         width: row.pageWidth,
         height: row.pageHeight
       },
+      apiConfiguration: row.apiConfiguration ? JSON.parse(row.apiConfiguration) : undefined,
+      numerationConfig: row.numerationConfig ? JSON.parse(row.numerationConfig) : undefined,
+      fieldMappings: row.fieldMappings ? JSON.parse(row.fieldMappings) : undefined,
+      tableMappings: row.tableMappings ? JSON.parse(row.tableMappings) : undefined,
       createdAt: new Date(row.createdAt),
       updatedAt: new Date(row.updatedAt)
     }));
@@ -125,6 +138,18 @@ export class SQLiteFormTemplateRepository implements IFormTemplateRepository {
       updates.push('pageHeight = ?');
       values.push(templateData.pageSize.width);
       values.push(templateData.pageSize.height);
+    }
+    if (templateData.apiConfiguration !== undefined) {
+      updates.push('apiConfiguration = ?');
+      values.push(templateData.apiConfiguration ? JSON.stringify(templateData.apiConfiguration) : null);
+    }
+    if (templateData.numerationConfig !== undefined) {
+      updates.push('numerationConfig = ?');
+      values.push(templateData.numerationConfig ? JSON.stringify(templateData.numerationConfig) : null);
+    }
+    if (templateData.fieldMappings !== undefined) {
+      updates.push('fieldMappings = ?');
+      values.push(templateData.fieldMappings ? JSON.stringify(templateData.fieldMappings) : null);
     }
 
     updates.push('updatedAt = ?');

@@ -333,6 +333,42 @@ const Dashboard: React.FC = () => {
         <div className="templates-grid">
           {templates.map((template) => (
             <div key={template.id} className="template-card">
+              {/* Icono de configuración en esquina superior derecha */}
+              <button
+                className="config-icon-btn"
+                onClick={() => navigate(`/api-config/${template.id}`)}
+                title="Configurar API y numeración"
+                style={{
+                  position: 'absolute',
+                  top: '10px',
+                  right: '10px',
+                  background: '#2196F3',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '36px',
+                  height: '36px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  fontSize: '18px',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                  zIndex: 10
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#1976D2';
+                  e.currentTarget.style.transform = 'scale(1.1)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#2196F3';
+                  e.currentTarget.style.transform = 'scale(1)';
+                }}
+              >
+                ⚙️
+              </button>
+
               <div className="template-icon">📋</div>
               <div className="template-info">
                 <h3>{template.name}</h3>

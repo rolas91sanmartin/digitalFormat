@@ -5,11 +5,18 @@ import { SQLiteFormTemplateRepository } from '../../infrastructure/repositories/
 import { OpenAIDocumentRecognitionService } from '../../infrastructure/services/OpenAIDocumentRecognitionService';
 import { RegisterUser } from '../../application/use-cases/auth/RegisterUser';
 import { LoginUser } from '../../application/use-cases/auth/LoginUser';
+import { RequestPasswordReset } from '../../application/use-cases/auth/RequestPasswordReset';
+import { VerifyResetCode } from '../../application/use-cases/auth/VerifyResetCode';
+import { ResetPassword } from '../../application/use-cases/auth/ResetPassword';
 import { CreateFormTemplate } from '../../application/use-cases/forms/CreateFormTemplate';
 import { GetUserFormTemplates } from '../../application/use-cases/forms/GetUserFormTemplates';
 import { GetFormTemplateById } from '../../application/use-cases/forms/GetFormTemplateById';
 import { DeleteFormTemplate } from '../../application/use-cases/forms/DeleteFormTemplate';
 import { UpdateFormTemplate } from '../../application/use-cases/forms/UpdateFormTemplate';
+import { SubmitFormData } from '../../application/use-cases/forms/SubmitFormData';
+import { RetryFormSubmission } from '../../application/use-cases/forms/RetryFormSubmission';
+import { SQLiteFormSequenceRepository } from '../../infrastructure/repositories/SQLiteFormSequenceRepository';
+import { SQLiteSubmittedFormRepository } from '../../infrastructure/repositories/SQLiteSubmittedFormRepository';
 import fs from 'fs';
 import path from 'path';
 import { app } from 'electron';
@@ -20,6 +27,8 @@ export function setupIpcHandlers() {
   const db = DatabaseConnection.getInstance();
   const userRepository = new SQLiteUserRepository(db);
   const formTemplateRepository = new SQLiteFormTemplateRepository(db);
+  const formSequenceRepository = new SQLiteFormSequenceRepository(db);
+  const submittedFormRepository = new SQLiteSubmittedFormRepository(db);
 
   // Cargar API Key si existe
   loadApiKey();
@@ -40,6 +49,36 @@ export function setupIpcHandlers() {
       const loginUser = new LoginUser(userRepository);
       const user = await loginUser.execute(data);
       return { success: true, user };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('auth:requestPasswordReset', async (_event, data) => {
+    try {
+      const requestPasswordReset = new RequestPasswordReset(userRepository, db);
+      const result = await requestPasswordReset.execute(data);
+      return { success: true, result };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('auth:verifyResetCode', async (_event, data) => {
+    try {
+      const verifyResetCode = new VerifyResetCode(userRepository, db);
+      const isValid = await verifyResetCode.execute(data);
+      return { success: true, isValid };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('auth:resetPassword', async (_event, data) => {
+    try {
+      const resetPassword = new ResetPassword(userRepository, db);
+      await resetPassword.execute(data);
+      return { success: true };
     } catch (error: any) {
       return { success: false, error: error.message };
     }
@@ -198,6 +237,62 @@ export function setupIpcHandlers() {
       });
     } catch (error: any) {
       return { success: false, error: error.message };
+    }
+  });
+
+  // Submit form handlers
+  ipcMain.handle('forms:submit', async (_event, data) => {
+    try {
+      const submitFormData = new SubmitFormData(
+        formTemplateRepository,
+        formSequenceRepository,
+        submittedFormRepository
+      );
+      const result = await submitFormData.execute(data);
+      return result;
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('forms:getSubmittedForms', async (_event, userId) => {
+    try {
+      const forms = await submittedFormRepository.findByUserId(userId);
+      return { success: true, forms };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('forms:getSubmittedFormsByTemplate', async (_event, templateId) => {
+    try {
+      const forms = await submittedFormRepository.findByTemplateId(templateId);
+      return { success: true, forms };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('forms:retrySubmission', async (_event, submittedFormId) => {
+    try {
+      const retryFormSubmission = new RetryFormSubmission(
+        formTemplateRepository,
+        submittedFormRepository
+      );
+      const result = await retryFormSubmission.execute(submittedFormId);
+      return result;
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('forms:getNextSequenceNumber', async (_event, templateId) => {
+    try {
+      const sequence = await formSequenceRepository.findByTemplateId(templateId);
+      const nextNumber = sequence ? sequence.lastNumber + 1 : 1;
+      return { success: true, nextNumber };
+    } catch (error: any) {
+      return { success: false, error: error.message, nextNumber: 1 };
     }
   });
 

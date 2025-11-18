@@ -90,6 +90,10 @@ const FormEditor: React.FC = () => {
   
   // Estado para campos personalizados agregados manualmente
   const [customFields, setCustomFields] = useState<FormField[]>([]);
+  
+  // Estado para controlar qué campo está siendo editado
+  const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
+  const [editingFieldName, setEditingFieldName] = useState<string>('');
 
   useEffect(() => {
     loadTemplate();
@@ -419,11 +423,111 @@ const FormEditor: React.FC = () => {
     );
   };
 
+  // Función para iniciar la edición del nombre de un campo personalizado
+  const handleStartEditFieldName = (fieldId: string, currentName: string) => {
+    setEditingFieldId(fieldId);
+    setEditingFieldName(currentName);
+  };
+
+  // Función para guardar el nuevo nombre del campo personalizado
+  const handleSaveFieldName = () => {
+    if (!editingFieldId) return;
+    
+    const trimmedName = editingFieldName.trim();
+    if (trimmedName === '') {
+      setNotification({ message: 'El nombre no puede estar vacío', type: 'error' });
+      return;
+    }
+    
+    setCustomFields((prev) =>
+      prev.map((field) =>
+        field.id === editingFieldId
+          ? { ...field, name: trimmedName }
+          : field
+      )
+    );
+    
+    setEditingFieldId(null);
+    setEditingFieldName('');
+    setNotification({ message: 'Nombre actualizado. Recuerda guardar los cambios.', type: 'success' });
+  };
+
+  // Función para cancelar la edición del nombre
+  const handleCancelEditFieldName = () => {
+    setEditingFieldId(null);
+    setEditingFieldName('');
+  };
+
   const handlePrint = async () => {
-    if (!template || !formRef.current) return;
+    if (!template || !formRef.current || !user) return;
 
     try {
+      // ===== CONFIRMACIÓN SI SE VA A GENERAR FOLIO =====
+      if (template.numerationConfig?.enabled) {
+        const confirmation = await Swal.fire({
+          title: '🔢 Generar Folio e Imprimir',
+          html: `
+            <p>Se generará un <strong>nuevo número de folio correlativo</strong> para este formulario.</p>
+            <p style="color: #f59e0b; margin-top: 1rem;">
+              ⚠️ Esta acción es irreversible. El número se incrementará automáticamente.
+            </p>
+            <p style="margin-top: 1rem;">¿Deseas continuar con la impresión?</p>
+          `,
+          icon: 'question',
+          showCancelButton: true,
+          confirmButtonColor: '#10b981',
+          cancelButtonColor: '#6b7280',
+          confirmButtonText: 'Sí, generar e imprimir',
+          cancelButtonText: 'Cancelar'
+        });
+
+        if (!confirmation.isConfirmed) {
+          return; // Usuario canceló la acción
+        }
+      }
+      // ===== FIN DE CONFIRMACIÓN =====
+      
       setPrinting(true);
+      
+      // ===== GENERAR FOLIO PRIMERO (si está configurado) =====
+      if (template.numerationConfig?.enabled) {
+        const submitResult = await window.electronAPI.submitForm(
+          template.id,
+          user.id,
+          { ...fieldValues, ...Object.entries(tableValues).reduce((acc, [tableId, rows]) => {
+            rows.forEach((row, rowIndex) => {
+              Object.entries(row).forEach(([colId, value]) => {
+                acc[`${tableId}_${colId}_row${rowIndex}`] = value;
+              });
+            });
+            return acc;
+          }, {} as Record<string, any>) }
+        );
+        
+        if (submitResult.success && submitResult.formNumber) {
+          // Actualizar el campo con el folio generado
+          if (template.numerationConfig.fieldId) {
+            setFieldValues(prev => ({
+              ...prev,
+              [template.numerationConfig.fieldId]: submitResult.formNumber
+            }));
+          }
+          
+          // Esperar a que se actualice la UI con el folio
+          await new Promise(resolve => setTimeout(resolve, 300));
+          
+          setNotification({ 
+            message: `✅ Folio generado: ${submitResult.formNumber}`, 
+            type: 'success' 
+          });
+        } else if (!submitResult.success) {
+          setNotification({ 
+            message: `⚠️ ${submitResult.error || 'Error al generar folio'}`, 
+            type: 'warning' 
+          });
+        }
+      }
+      // ===== FIN DE GENERACIÓN DE FOLIO =====
       
       // Desactivar modo drag antes de imprimir
       const wasDragMode = isDragMode;
@@ -1044,9 +1148,58 @@ const FormEditor: React.FC = () => {
                 </h3>
                 {customFields.map((field) => (
                   <div key={field.id} className="field-input-group">
-                    <label style={{ color: '#10b981', fontWeight: '600' }}>
-                      {field.name}
-                    </label>
+                    {editingFieldId === field.id ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                        <input
+                          type="text"
+                          value={editingFieldName}
+                          onChange={(e) => setEditingFieldName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSaveFieldName();
+                            if (e.key === 'Escape') handleCancelEditFieldName();
+                          }}
+                          onBlur={handleSaveFieldName}
+                          autoFocus
+                          style={{
+                            flex: 1,
+                            padding: '0.25rem 0.5rem',
+                            border: '2px solid #10b981',
+                            borderRadius: '4px',
+                            fontSize: '0.9rem',
+                            fontWeight: '600',
+                            color: '#10b981'
+                          }}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </div>
+                    ) : (
+                      <label 
+                        style={{ 
+                          color: '#10b981', 
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                          display: 'inline-block',
+                          padding: '0.25rem 0.5rem',
+                          borderRadius: '4px',
+                          transition: 'background-color 0.2s'
+                        }}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleStartEditFieldName(field.id, field.name);
+                        }}
+                        onMouseEnter={(e) => {
+                          (e.target as HTMLElement).style.backgroundColor = '#d1fae5';
+                        }}
+                        onMouseLeave={(e) => {
+                          (e.target as HTMLElement).style.backgroundColor = 'transparent';
+                        }}
+                        title="Haz clic para editar el nombre"
+                      >
+                        {field.name}
+                      </label>
+                    )}
                     <input
                       type="text"
                       className="input"

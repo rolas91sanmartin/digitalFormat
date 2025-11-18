@@ -248,6 +248,14 @@ const FormEditorVisual: React.FC = () => {
 
         <div className="toolbar-right">
           <button 
+            className="btn"
+            onClick={() => navigate(`/api-config/${id}`)}
+            title="Configurar API y numeración automática"
+            style={{ background: '#2196F3', color: 'white' }}
+          >
+            ⚙️ API/Numeración
+          </button>
+          <button 
             className="btn btn-success"
             onClick={handleSave}
             disabled={saving}
