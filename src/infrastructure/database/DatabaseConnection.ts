@@ -63,6 +63,7 @@ export class DatabaseConnection {
         apiConfiguration TEXT,
         numerationConfig TEXT,
         fieldMappings TEXT,
+        tableMappings TEXT,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL,
         FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE

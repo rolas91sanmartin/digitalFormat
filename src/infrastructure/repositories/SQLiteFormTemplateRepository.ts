@@ -54,6 +54,12 @@ export class SQLiteFormTemplateRepository implements IFormTemplateRepository {
 
     if (!row) return null;
 
+    console.log('📖 [SQLite] Cargando template:', row.id);
+    console.log('📖 [SQLite] tableMappings raw:', row.tableMappings);
+    
+    const parsedTableMappings = row.tableMappings ? JSON.parse(row.tableMappings) : undefined;
+    console.log('📖 [SQLite] tableMappings parseado:', parsedTableMappings);
+    
     return {
       id: row.id,
       name: row.name,
@@ -71,7 +77,7 @@ export class SQLiteFormTemplateRepository implements IFormTemplateRepository {
       apiConfiguration: row.apiConfiguration ? JSON.parse(row.apiConfiguration) : undefined,
       numerationConfig: row.numerationConfig ? JSON.parse(row.numerationConfig) : undefined,
       fieldMappings: row.fieldMappings ? JSON.parse(row.fieldMappings) : undefined,
-      tableMappings: row.tableMappings ? JSON.parse(row.tableMappings) : undefined,
+      tableMappings: parsedTableMappings,
       createdAt: new Date(row.createdAt),
       updatedAt: new Date(row.updatedAt)
     };
@@ -151,6 +157,13 @@ export class SQLiteFormTemplateRepository implements IFormTemplateRepository {
       updates.push('fieldMappings = ?');
       values.push(templateData.fieldMappings ? JSON.stringify(templateData.fieldMappings) : null);
     }
+    if (templateData.tableMappings !== undefined) {
+      console.log('💾 [SQLite] Guardando tableMappings:', templateData.tableMappings);
+      updates.push('tableMappings = ?');
+      const serialized = templateData.tableMappings ? JSON.stringify(templateData.tableMappings) : null;
+      console.log('💾 [SQLite] Serializado como:', serialized);
+      values.push(serialized);
+    }
 
     updates.push('updatedAt = ?');
     values.push(now, id);
@@ -159,6 +172,7 @@ export class SQLiteFormTemplateRepository implements IFormTemplateRepository {
       UPDATE form_templates SET ${updates.join(', ')} WHERE id = ?
     `);
 
+    console.log('📝 [SQLite] Ejecutando UPDATE con:', updates.join(', '));
     stmt.run(...values);
 
     const template = await this.findById(id);

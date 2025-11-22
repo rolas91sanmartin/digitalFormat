@@ -40,8 +40,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   importFormTemplate: (userId: string, templateData: any) =>
     ipcRenderer.invoke('forms:import', { userId, templateData }),
   
-  submitForm: (templateId: string, userId: string, values: Record<string, any>) =>
-    ipcRenderer.invoke('forms:submit', { templateId, userId, values }),
+  submitForm: (templateId: string, userId: string, userEmail: string, values: Record<string, any>) =>
+    ipcRenderer.invoke('forms:submit', { templateId, userId, userEmail, values }),
   
   getSubmittedForms: (userId: string) =>
     ipcRenderer.invoke('forms:getSubmittedForms', userId),
@@ -52,9 +52,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   retryFormSubmission: (submittedFormId: string) =>
     ipcRenderer.invoke('forms:retrySubmission', submittedFormId),
   
-  getNextSequenceNumber: (templateId: string) =>
+  getNextSequenceNumber: (templateId: string) => 
     ipcRenderer.invoke('forms:getNextSequenceNumber', templateId),
-
+  
+  previewNextFolio: (templateId: string) =>
+    ipcRenderer.invoke('forms:previewNextFolio', templateId),
+  
   // Printing
   printForm: (htmlContent: string) =>
     ipcRenderer.invoke('print:form', htmlContent),
@@ -70,7 +73,42 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('settings:getApiKey'),
   
   setApiKey: (apiKey: string) =>
-    ipcRenderer.invoke('settings:setApiKey', apiKey)
+    ipcRenderer.invoke('settings:setApiKey', apiKey),
+
+  // Updates
+  checkForUpdates: () =>
+    ipcRenderer.invoke('update:check'),
+  
+  downloadUpdate: () =>
+    ipcRenderer.invoke('update:download'),
+  
+  installUpdate: () =>
+    ipcRenderer.invoke('update:install'),
+  
+  onUpdateAvailable: (callback: (info: any) => void) => {
+    ipcRenderer.on('update:available', (_event, info) => callback(info));
+    return () => ipcRenderer.removeAllListeners('update:available');
+  },
+  
+  onUpdateNotAvailable: (callback: () => void) => {
+    ipcRenderer.on('update:not-available', () => callback());
+    return () => ipcRenderer.removeAllListeners('update:not-available');
+  },
+  
+  onDownloadProgress: (callback: (progress: any) => void) => {
+    ipcRenderer.on('update:download-progress', (_event, progress) => callback(progress));
+    return () => ipcRenderer.removeAllListeners('update:download-progress');
+  },
+  
+  onUpdateDownloaded: (callback: (info: any) => void) => {
+    ipcRenderer.on('update:downloaded', (_event, info) => callback(info));
+    return () => ipcRenderer.removeAllListeners('update:downloaded');
+  },
+  
+  onUpdateError: (callback: (error: string) => void) => {
+    ipcRenderer.on('update:error', (_event, error) => callback(error));
+    return () => ipcRenderer.removeAllListeners('update:error');
+  }
 });
 
 export type ElectronAPI = {
@@ -86,16 +124,25 @@ export type ElectronAPI = {
   updateFormTemplate: (id: string, userId: string, updates: any) => Promise<any>;
   deleteFormTemplate: (id: string, userId: string) => Promise<any>;
   importFormTemplate: (userId: string, templateData: any) => Promise<any>;
-  submitForm: (templateId: string, userId: string, values: Record<string, any>) => Promise<any>;
+  submitForm: (templateId: string, userId: string, userEmail: string, values: Record<string, any>) => Promise<any>;
   getSubmittedForms: (userId: string) => Promise<any>;
   getSubmittedFormsByTemplate: (templateId: string) => Promise<any>;
   retryFormSubmission: (submittedFormId: string) => Promise<any>;
   getNextSequenceNumber: (templateId: string) => Promise<any>;
+  previewNextFolio: (templateId: string) => Promise<any>;
   printForm: (htmlContent: string) => Promise<any>;
   printWithBackground: (options?: any) => Promise<any>;
   selectFile: () => Promise<{ filePath: string; buffer: ArrayBuffer; type: string } | null>;
   getApiKey: () => Promise<string>;
   setApiKey: (apiKey: string) => Promise<void>;
+  checkForUpdates: () => Promise<any>;
+  downloadUpdate: () => Promise<any>;
+  installUpdate: () => Promise<void>;
+  onUpdateAvailable: (callback: (info: any) => void) => () => void;
+  onUpdateNotAvailable: (callback: () => void) => () => void;
+  onDownloadProgress: (callback: (progress: any) => void) => () => void;
+  onUpdateDownloaded: (callback: (info: any) => void) => () => void;
+  onUpdateError: (callback: (error: string) => void) => () => void;
 };
 
 declare global {

@@ -6,6 +6,7 @@ import { FormTemplate, ApiConfiguration, FieldMapping } from '../../../domain/en
 export interface SubmitFormDataDTO {
   templateId: string;
   userId: string;
+  userEmail: string;
   values: Record<string, any>;
 }
 
@@ -64,13 +65,25 @@ export class SubmitFormData {
       });
 
       // 5. Enviar a API (si está habilitada)
+      console.log('🔍 [SubmitFormData] Verificando configuración de API...');
+      console.log('🔍 [SubmitFormData] apiConfiguration:', template.apiConfiguration);
+      console.log('🔍 [SubmitFormData] API habilitada?:', template.apiConfiguration?.enabled);
+      
       if (template.apiConfiguration?.enabled) {
+        console.log('✅ [SubmitFormData] API HABILITADA - Preparando envío...');
         try {
           // Mapear campos según configuración
-          const mappedData = this.mapFieldsToApi(template, data.values);
+          console.log('📋 [SubmitFormData] Datos originales:', data.values);
+          console.log('👤 [SubmitFormData] Usuario que envía (ID):', data.userId);
+          console.log('📧 [SubmitFormData] Email del usuario:', data.userEmail);
+          const mappedData = this.mapFieldsToApi(template, data.values, data.userEmail);
+          console.log('📋 [SubmitFormData] Datos mapeados:', mappedData);
+          console.log('🌐 [SubmitFormData] Endpoint:', template.apiConfiguration.endpoint);
 
           // Enviar a API
+          console.log('🚀 [SubmitFormData] Enviando a API...');
           const apiResponse = await this.sendToApi(template.apiConfiguration, mappedData);
+          console.log('✅ [SubmitFormData] Respuesta de API:', apiResponse);
 
           // Actualizar con respuesta exitosa
           await this.submittedFormRepository.update(submittedForm.id, {
@@ -106,9 +119,12 @@ export class SubmitFormData {
             error: `Error al enviar a API: ${error.message}`
           };
         }
+      } else {
+        console.log('⚠️ [SubmitFormData] API NO HABILITADA - Solo guardando localmente');
       }
 
       // Sin API configurada, solo guardado local
+      console.log('💾 [SubmitFormData] Guardado local completado');
       return {
         success: true,
         formNumber,
@@ -202,7 +218,7 @@ export class SubmitFormData {
     return { valid: true };
   }
 
-  private mapFieldsToApi(template: FormTemplate, values: Record<string, any>): any {
+  private mapFieldsToApi(template: FormTemplate, values: Record<string, any>, userEmail: string): any {
     const dataFormat = template.apiConfiguration?.dataFormat || 'structured';
 
     // Mapear campos
@@ -278,6 +294,7 @@ export class SubmitFormData {
           formNumber: values[template.numerationConfig?.fieldId || ''] || '',
           templateId: template.id,
           templateName: template.name,
+          submittedBy: userEmail,
           submittedAt: new Date().toISOString()
         },
         fields: mappedFields,
@@ -287,6 +304,7 @@ export class SubmitFormData {
       // Formato plano: todo al mismo nivel
       const flatData: any = {
         folio: values[template.numerationConfig?.fieldId || ''] || '',
+        enviado_por: userEmail,
         fecha_envio: new Date().toISOString(),
         ...mappedFields
       };
@@ -304,6 +322,7 @@ export class SubmitFormData {
           formNumber: values[template.numerationConfig?.fieldId || ''] || '',
           templateId: template.id,
           templateName: template.name,
+          submittedBy: userEmail,
           submittedAt: new Date().toISOString()
         },
         fields: mappedFields,
@@ -335,6 +354,9 @@ export class SubmitFormData {
       'Content-Type': 'application/json',
       ...config.headers
     };
+    
+    console.log('📋 [sendToApi] Headers personalizados configurados:', config.headers);
+    console.log('📋 [sendToApi] Headers iniciales:', headers);
 
     // Agregar autenticación
     if (config.authentication && config.authentication.type !== 'none') {
@@ -357,12 +379,18 @@ export class SubmitFormData {
           break;
       }
     }
+    
+    console.log('📋 [sendToApi] Headers finales (con autenticación):', headers);
 
     // Timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), config.timeout || 30000);
 
     try {
+      console.log('🌐 [sendToApi] Realizando fetch a:', config.endpoint);
+      console.log('🌐 [sendToApi] Método:', config.method);
+      console.log('🌐 [sendToApi] Body:', JSON.stringify(data, null, 2));
+      
       const response = await fetch(config.endpoint, {
         method: config.method,
         headers,

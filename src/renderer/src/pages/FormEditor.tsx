@@ -54,6 +54,19 @@ interface FormTemplate {
     width: number;
     height: number;
   };
+  numerationConfig?: {
+    enabled: boolean;
+    fieldId: string;
+    type: string;
+    prefix: string;
+    suffix: string;
+    padding: number;
+  };
+  apiConfiguration?: {
+    enabled: boolean;
+    endpoint: string;
+    method: string;
+  };
 }
 
 const FormEditor: React.FC = () => {
@@ -66,7 +79,6 @@ const FormEditor: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [printing, setPrinting] = useState(false);
-  const formRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0.8);
   
@@ -98,6 +110,30 @@ const FormEditor: React.FC = () => {
   useEffect(() => {
     loadTemplate();
   }, [id]);
+
+  // Cargar vista previa del folio cuando se carga el template
+  useEffect(() => {
+    const loadFolioPreview = async () => {
+      if (!template || !template.numerationConfig?.enabled || !template.numerationConfig.fieldId) {
+        return;
+      }
+
+      console.log('🔍 [FormEditor] Cargando vista previa del folio...');
+      const previewResult = await window.electronAPI.previewNextFolio(template.id);
+      
+      if (previewResult.success && previewResult.formNumber) {
+        console.log('👁️ [FormEditor] Vista previa del folio:', previewResult.formNumber);
+        
+        // Mostrar el folio en el campo configurado
+            setFieldValues(prev => ({
+              ...prev,
+              [template.numerationConfig!.fieldId]: previewResult.formNumber
+            }));
+      }
+    };
+
+    loadFolioPreview();
+  }, [template?.id, template?.numerationConfig?.enabled]);
 
   // Protección adicional: forzar que los inputs del sidebar SIEMPRE estén habilitados
   useEffect(() => {
@@ -182,7 +218,7 @@ const FormEditor: React.FC = () => {
         result.template.tables?.forEach((table: TableDefinition) => {
           // Usar las filas guardadas si existen, si no, crear filas vacías basadas en minRows
           const savedRows = (table as any).savedRows;
-          let rows = [];
+          let rows: any[] = [];
           
           if (savedRows && Array.isArray(savedRows) && savedRows.length > 0) {
             // Usar las filas guardadas
@@ -459,25 +495,51 @@ const FormEditor: React.FC = () => {
   };
 
   const handlePrint = async () => {
-    if (!template || !formRef.current || !user) return;
+    if (!template || !canvasRef.current || !user) return;
 
     try {
-      // ===== CONFIRMACIÓN SI SE VA A GENERAR FOLIO =====
-      if (template.numerationConfig?.enabled) {
-        const confirmation = await Swal.fire({
-          title: '🔢 Generar Folio e Imprimir',
-          html: `
-            <p>Se generará un <strong>nuevo número de folio correlativo</strong> para este formulario.</p>
+      // ===== CONFIRMACIÓN SI SE VA A GENERAR FOLIO O ENVIAR A API =====
+      if (template.numerationConfig?.enabled || template.apiConfiguration?.enabled) {
+        let confirmMessage = '';
+        
+        // Obtener el folio actual que ya se está mostrando en el campo
+        const currentFolio = template.numerationConfig?.fieldId 
+          ? fieldValues[template.numerationConfig.fieldId] 
+          : '';
+        
+        if (template.numerationConfig?.enabled && template.apiConfiguration?.enabled) {
+          confirmMessage = `
+            <p>Se realizarán las siguientes acciones:</p>
+            <ul style="text-align: left; margin: 1rem auto; max-width: 400px;">
+              <li>🔢 Generar <strong>folio correlativo: ${currentFolio || 'próximo'}</strong></li>
+              <li>📤 Enviar datos a la <strong>API externa</strong></li>
+            </ul>
+            <p style="color: #f59e0b; margin-top: 1rem;">
+              ⚠️ Estas acciones son irreversibles.
+            </p>
+          `;
+        } else if (template.numerationConfig?.enabled) {
+          confirmMessage = `
+            <p>Se generará el folio: <strong>${currentFolio}</strong></p>
             <p style="color: #f59e0b; margin-top: 1rem;">
               ⚠️ Esta acción es irreversible. El número se incrementará automáticamente.
             </p>
-            <p style="margin-top: 1rem;">¿Deseas continuar con la impresión?</p>
-          `,
+          `;
+        } else {
+          confirmMessage = `
+            <p>Los datos del formulario se enviarán a la <strong>API externa configurada</strong>.</p>
+            <p style="margin-top: 1rem;">¿Deseas continuar?</p>
+          `;
+        }
+        
+        const confirmation = await Swal.fire({
+          title: template.numerationConfig?.enabled ? '🔢 Generar Folio e Imprimir' : '📤 Enviar a API e Imprimir',
+          html: confirmMessage + '<p style="margin-top: 1rem;">¿Deseas continuar con la impresión?</p>',
           icon: 'question',
           showCancelButton: true,
           confirmButtonColor: '#10b981',
           cancelButtonColor: '#6b7280',
-          confirmButtonText: 'Sí, generar e imprimir',
+          confirmButtonText: 'Sí, continuar',
           cancelButtonText: 'Cancelar'
         });
 
@@ -489,11 +551,17 @@ const FormEditor: React.FC = () => {
       
       setPrinting(true);
       
-      // ===== GENERAR FOLIO PRIMERO (si está configurado) =====
-      if (template.numerationConfig?.enabled) {
+      // ===== ENVIAR A API / GENERAR FOLIO (si está configurado) =====
+      console.log('🔍 [FormEditor] Verificando configuración...');
+      console.log('🔍 [FormEditor] Numeración habilitada?:', template.numerationConfig?.enabled);
+      console.log('🔍 [FormEditor] API habilitada?:', template.apiConfiguration?.enabled);
+      
+      if (template.numerationConfig?.enabled || template.apiConfiguration?.enabled) {
+        console.log('📤 [FormEditor] Enviando formulario a submitForm...');
         const submitResult = await window.electronAPI.submitForm(
           template.id,
           user.id,
+          user.email,
           { ...fieldValues, ...Object.entries(tableValues).reduce((acc, [tableId, rows]) => {
             rows.forEach((row, rowIndex) => {
               Object.entries(row).forEach(([colId, value]) => {
@@ -504,30 +572,56 @@ const FormEditor: React.FC = () => {
           }, {} as Record<string, any>) }
         );
         
-        if (submitResult.success && submitResult.formNumber) {
-          // Actualizar el campo con el folio generado
-          if (template.numerationConfig.fieldId) {
+        console.log('✅ [FormEditor] Respuesta de submitForm:', submitResult);
+        
+        if (submitResult.success) {
+          // Actualizar el campo con el folio generado real (si hay numeración)
+          if (submitResult.formNumber && template.numerationConfig?.fieldId) {
             setFieldValues(prev => ({
               ...prev,
-              [template.numerationConfig.fieldId]: submitResult.formNumber
+              [template.numerationConfig!.fieldId]: submitResult.formNumber
             }));
+            
+            // Esperar a que se actualice la UI con el folio
+            await new Promise(resolve => setTimeout(resolve, 300));
           }
           
-          // Esperar a que se actualice la UI con el folio
-          await new Promise(resolve => setTimeout(resolve, 300));
+          let successMessage = '';
+          if (submitResult.formNumber && template.apiConfiguration?.enabled) {
+            successMessage = `✅ Folio: ${submitResult.formNumber} | API: Enviado`;
+          } else if (submitResult.formNumber) {
+            successMessage = `✅ Folio generado: ${submitResult.formNumber}`;
+          } else if (template.apiConfiguration?.enabled) {
+            successMessage = `✅ Datos enviados a la API`;
+          }
           
-          setNotification({ 
-            message: `✅ Folio generado: ${submitResult.formNumber}`, 
-            type: 'success' 
-          });
+          if (successMessage) {
+            setNotification({ message: successMessage, type: 'success' });
+          }
+
+          // Después de imprimir exitosamente, cargar el siguiente folio para la próxima impresión
+          if (submitResult.formNumber && template.numerationConfig?.enabled && template.numerationConfig?.fieldId) {
+            setTimeout(async () => {
+              const nextPreview = await window.electronAPI.previewNextFolio(template.id);
+              if (nextPreview.success && nextPreview.formNumber && template.numerationConfig?.fieldId) {
+                setFieldValues(prev => ({
+                  ...prev,
+                  [template.numerationConfig!.fieldId]: nextPreview.formNumber
+                }));
+                console.log('👁️ [FormEditor] Próximo folio cargado:', nextPreview.formNumber);
+              }
+            }, 1000);
+          }
         } else if (!submitResult.success) {
           setNotification({ 
-            message: `⚠️ ${submitResult.error || 'Error al generar folio'}`, 
+            message: `⚠️ ${submitResult.error || 'Error al procesar'}`, 
             type: 'warning' 
           });
         }
+      } else {
+        console.log('ℹ️ [FormEditor] No hay numeración ni API configurada - Solo imprimiendo');
       }
-      // ===== FIN DE GENERACIÓN DE FOLIO =====
+      // ===== FIN DE ENVÍO/GENERACIÓN =====
       
       // Desactivar modo drag antes de imprimir
       const wasDragMode = isDragMode;
@@ -727,7 +821,7 @@ const FormEditor: React.FC = () => {
   };
 
   // Funciones para drag and drop
-  const handleMouseDown = (e: React.MouseEvent, type: 'field' | 'table' | 'cell', id: string, currentX: number, currentY: number) => {
+  const handleMouseDown = (e: React.MouseEvent, type: 'field' | 'table' | 'cell' | 'custom', id: string, currentX: number, currentY: number) => {
     if (!isDragMode) return;
     
     e.preventDefault();
@@ -1399,10 +1493,7 @@ const FormEditor: React.FC = () => {
           <div className="preview-wrapper">
             <div className="preview-container" style={{ transform: `scale(${scale})`, transformOrigin: 'top center' }}>
               <div
-                ref={(el) => { 
-                  formRef.current = el; 
-                  canvasRef.current = el; 
-                }}
+                ref={canvasRef}
                 className="form-canvas"
                 style={{
                   width: `${template.pageSize.width}px`,

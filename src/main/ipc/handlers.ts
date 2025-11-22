@@ -22,6 +22,54 @@ import path from 'path';
 import { app } from 'electron';
 
 let openaiApiKey: string = '';
+let mainWindow: BrowserWindow | null = null;
+
+export function setupAutoUpdater(window: BrowserWindow) {
+  mainWindow = window;
+  const { autoUpdater } = require('electron-updater');
+  
+  // Configurar auto-updater
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+  
+  // Eventos de actualización
+  autoUpdater.on('update-available', (info: any) => {
+    if (mainWindow) {
+      mainWindow.webContents.send('update:available', info);
+    }
+  });
+  
+  autoUpdater.on('update-not-available', () => {
+    if (mainWindow) {
+      mainWindow.webContents.send('update:not-available');
+    }
+  });
+  
+  autoUpdater.on('download-progress', (progressObj: any) => {
+    if (mainWindow) {
+      mainWindow.webContents.send('update:download-progress', progressObj);
+    }
+  });
+  
+  autoUpdater.on('update-downloaded', (info: any) => {
+    if (mainWindow) {
+      mainWindow.webContents.send('update:downloaded', info);
+    }
+  });
+  
+  autoUpdater.on('error', (err: any) => {
+    if (mainWindow) {
+      mainWindow.webContents.send('update:error', err.message);
+    }
+  });
+  
+  // Verificar actualizaciones al iniciar (después de 3 segundos)
+  setTimeout(() => {
+    autoUpdater.checkForUpdates().catch((err: any) => {
+      console.error('Error al verificar actualizaciones:', err);
+    });
+  }, 3000);
+}
 
 export function setupIpcHandlers() {
   const db = DatabaseConnection.getInstance();
@@ -296,6 +344,33 @@ export function setupIpcHandlers() {
     }
   });
 
+  ipcMain.handle('forms:previewNextFolio', async (_event, templateId) => {
+    try {
+      const template = await formTemplateRepository.findById(templateId);
+      if (!template || !template.numerationConfig?.enabled) {
+        return { success: false, error: 'Numeración no configurada' };
+      }
+
+      const sequence = await formSequenceRepository.findByTemplateId(templateId);
+      const nextNumber = sequence ? sequence.lastNumber + 1 : 1;
+      
+      const config = template.numerationConfig;
+      const paddedNumber = nextNumber.toString().padStart(config.padding, '0');
+      
+      let formNumber: string;
+      if (config.type === 'sequential') {
+        formNumber = `${config.prefix}${paddedNumber}${config.suffix}`;
+      } else {
+        const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        formNumber = `${config.prefix}${date}-${paddedNumber}${config.suffix}`;
+      }
+
+      return { success: true, formNumber };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  });
+
   // Settings handlers
   ipcMain.handle('settings:getApiKey', async () => {
     return openaiApiKey;
@@ -304,6 +379,32 @@ export function setupIpcHandlers() {
   ipcMain.handle('settings:setApiKey', async (_event, apiKey) => {
     openaiApiKey = apiKey;
     saveApiKey(apiKey);
+  });
+
+  // Update handlers
+  ipcMain.handle('update:check', async () => {
+    try {
+      const { autoUpdater } = require('electron-updater');
+      const result = await autoUpdater.checkForUpdates();
+      return { success: true, updateInfo: result?.updateInfo };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('update:download', async () => {
+    try {
+      const { autoUpdater } = require('electron-updater');
+      await autoUpdater.downloadUpdate();
+      return { success: true };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('update:install', () => {
+    const { autoUpdater } = require('electron-updater');
+    autoUpdater.quitAndInstall();
   });
 }
 

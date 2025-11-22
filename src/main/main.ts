@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { DatabaseConnection } from '../infrastructure/database/DatabaseConnection';
-import { setupIpcHandlers } from './ipc/handlers';
+import { setupIpcHandlers, setupAutoUpdater } from './ipc/handlers';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -175,6 +175,13 @@ app.whenReady().then(async () => {
     log('Creando ventana...');
     await createWindow();
     log('✓ Ventana creada');
+    
+    // Configurar auto-updater
+    if (mainWindow && app.isPackaged) {
+      log('Configurando auto-updater...');
+      setupAutoUpdater(mainWindow);
+      log('✓ Auto-updater configurado');
+    }
   } catch (err: any) {
     log(`ERROR creando ventana: ${err.message}`);
     log(`Stack: ${err.stack}`);

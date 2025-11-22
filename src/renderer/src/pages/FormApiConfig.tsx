@@ -22,6 +22,7 @@ const FormApiConfig: React.FC = () => {
   const [apiKeyValue, setApiKeyValue] = useState('');
   const [basicUsername, setBasicUsername] = useState('');
   const [basicPassword, setBasicPassword] = useState('');
+  const [customHeaders, setCustomHeaders] = useState<Array<{ key: string; value: string }>>([]);
 
   // Configuración de numeración
   const [numerationEnabled, setNumerationEnabled] = useState(false);
@@ -69,6 +70,15 @@ const FormApiConfig: React.FC = () => {
           setBasicUsername(api.authentication?.username || '');
           setBasicPassword(api.authentication?.password || '');
           setDataFormat(api.dataFormat || 'structured');
+          
+          // Cargar headers personalizados
+          if (api.headers && typeof api.headers === 'object') {
+            const headersArray = Object.entries(api.headers).map(([key, value]) => ({
+              key,
+              value: String(value)
+            }));
+            setCustomHeaders(headersArray);
+          }
         }
 
         if (tmpl.numerationConfig) {
@@ -97,9 +107,12 @@ const FormApiConfig: React.FC = () => {
         }
         
         // Inicializar mapeos de tablas
-        if (tmpl.tableMappings) {
+        console.log('📊 Cargando tableMappings:', tmpl.tableMappings);
+        if (tmpl.tableMappings && Array.isArray(tmpl.tableMappings) && tmpl.tableMappings.length > 0) {
+          console.log('✅ Usando tableMappings guardados:', tmpl.tableMappings);
           setTableMappings(tmpl.tableMappings);
         } else if (tmpl.tables && tmpl.tables.length > 0) {
+          console.log('🔄 Inicializando tableMappings automáticamente');
           // Inicializar mapeos automáticamente para cada tabla
           const initialTableMappings = tmpl.tables.map((table: any) => ({
             tableId: table.id,
@@ -135,11 +148,19 @@ const FormApiConfig: React.FC = () => {
     if (!user || !template) return;
 
     try {
+      // Convertir headers personalizados a objeto
+      const headersObject: Record<string, string> = {};
+      customHeaders.forEach(header => {
+        if (header.key.trim() && header.value.trim()) {
+          headersObject[header.key.trim()] = header.value.trim();
+        }
+      });
+      
       const apiConfiguration = apiEnabled ? {
         enabled: true,
         endpoint: apiEndpoint,
         method: apiMethod,
-        headers: {},
+        headers: headersObject,
         authentication: {
           type: authType,
           ...(authType === 'bearer' && { token: bearerToken }),
@@ -164,12 +185,18 @@ const FormApiConfig: React.FC = () => {
         startFrom: numerationStartFrom
       } : undefined;
 
+      console.log('💾 Guardando tableMappings:', tableMappings);
+      console.log('💾 Guardando custom headers:', headersObject);
+      console.log('💾 API habilitada:', apiEnabled);
+      
       const response = await window.electronAPI.updateFormTemplate(template.id, user.id, {
         apiConfiguration,
         numerationConfig,
         fieldMappings: apiEnabled ? fieldMappings : undefined,
         tableMappings: apiEnabled ? tableMappings : undefined
       });
+      
+      console.log('✅ Respuesta del guardado:', response);
 
       if (response.success) {
         await Swal.fire('¡Guardado!', 'Configuración actualizada correctamente', 'success');
@@ -204,6 +231,21 @@ const FormApiConfig: React.FC = () => {
         )
       };
     }));
+  };
+
+  // Funciones para manejar headers personalizados
+  const addCustomHeader = () => {
+    setCustomHeaders(prev => [...prev, { key: '', value: '' }]);
+  };
+
+  const updateCustomHeader = (index: number, field: 'key' | 'value', value: string) => {
+    setCustomHeaders(prev => prev.map((header, i) => 
+      i === index ? { ...header, [field]: value } : header
+    ));
+  };
+
+  const removeCustomHeader = (index: number) => {
+    setCustomHeaders(prev => prev.filter((_, i) => i !== index));
   };
 
   const generateJsonPreview = () => {
@@ -254,6 +296,7 @@ const FormApiConfig: React.FC = () => {
     } else if (dataFormat === 'flat') {
       return {
         folio: getPreviewNumber(),
+        enviado_por: user?.email || 'user@example.com',
         fecha_envio: new Date().toISOString(),
         ...exampleFieldValues,
         ...Object.entries(exampleTableData).reduce((acc, [key, value]) => {
@@ -268,6 +311,7 @@ const FormApiConfig: React.FC = () => {
           formNumber: getPreviewNumber(),
           templateId: template.id,
           templateName: template.name,
+          submittedBy: user?.email || 'user@example.com',
           submittedAt: new Date().toISOString()
         },
         fields: exampleFieldValues,
@@ -417,6 +461,82 @@ const FormApiConfig: React.FC = () => {
                   </div>
                 </>
               )}
+
+              {/* Headers Personalizados */}
+              <h3 style={{ marginTop: '25px', marginBottom: '15px' }}>Headers / Encabezados Personalizados</h3>
+              <div style={{ marginBottom: '20px' }}>
+                <div style={{ marginBottom: '10px', fontSize: '13px', color: '#6b7280' }}>
+                  Agrega encabezados HTTP personalizados que se enviarán con cada petición (ej: Content-Type, X-Custom-Header, etc.)
+                </div>
+                
+                {customHeaders.map((header, index) => (
+                  <div key={index} style={{ display: 'flex', gap: '10px', marginBottom: '10px', alignItems: 'center' }}>
+                    <input 
+                      type="text"
+                      className="input"
+                      placeholder="Nombre del header (ej: Content-Type)"
+                      value={header.key}
+                      onChange={(e) => updateCustomHeader(index, 'key', e.target.value)}
+                      style={{ flex: 1 }}
+                    />
+                    <input 
+                      type="text"
+                      className="input"
+                      placeholder="Valor (ej: application/json)"
+                      value={header.value}
+                      onChange={(e) => updateCustomHeader(index, 'value', e.target.value)}
+                      style={{ flex: 1 }}
+                    />
+                    <button 
+                      onClick={() => removeCustomHeader(index)}
+                      style={{ 
+                        padding: '8px 12px', 
+                        background: '#ef4444', 
+                        color: 'white', 
+                        border: 'none', 
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '14px'
+                      }}
+                      title="Eliminar header"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                ))}
+                
+                <button 
+                  onClick={addCustomHeader}
+                  style={{ 
+                    marginTop: '10px',
+                    padding: '8px 16px', 
+                    background: '#10b981', 
+                    color: 'white', 
+                    border: 'none', 
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  ➕ Agregar Header
+                </button>
+                
+                {customHeaders.length > 0 && (
+                  <div style={{ marginTop: '15px', padding: '12px', background: '#eff6ff', borderRadius: '6px', border: '1px solid #bfdbfe' }}>
+                    <div style={{ fontSize: '13px', color: '#1e40af', marginBottom: '8px' }}>
+                      <strong>💡 Headers comunes:</strong>
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#1e40af', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <div>• <code style={{ background: 'white', padding: '2px 6px', borderRadius: '3px' }}>Content-Type: application/json</code></div>
+                      <div>• <code style={{ background: 'white', padding: '2px 6px', borderRadius: '3px' }}>Accept: application/json</code></div>
+                      <div>• <code style={{ background: 'white', padding: '2px 6px', borderRadius: '3px' }}>X-Custom-Header: valor</code></div>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               <h3 style={{ marginTop: '20px', marginBottom: '15px' }}>Formato de Datos</h3>
               <div style={{ marginBottom: '20px', padding: '15px', background: '#f9fafb', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
