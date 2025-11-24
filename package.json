@@ -79,7 +79,9 @@
       {
         "provider": "github",
         "owner": "rolas91sanmartin",
-        "repo": "digitalFormat"
+        "repo": "digitalFormat",
+        "private": false,
+        "releaseType": "release"
       }
     ],
     "win": {
