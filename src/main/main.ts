@@ -60,7 +60,7 @@ async function createWindow() {
       preload: path.join(__dirname, 'preload.js')
     },
     autoHideMenuBar: true,
-    title: 'FormatPrinter IA - By rsanchez@sanmartin.com.ni 2025',
+    title: 'FormatPrinter IA - By rsanchez@sanmartin.com.ni',
     show: false // No mostrar hasta que esté cargada
   });
 
