@@ -66,6 +66,21 @@
   -webkit-text-fill-color: currentcolor !important;
 }
 
+/* ⭐ EXCEPCIÓN: Campo de folio auto-generado debe estar deshabilitado */
+.editor-sidebar input.folio-field-disabled,
+.editor-sidebar textarea.folio-field-disabled {
+  pointer-events: none !important;
+  cursor: not-allowed !important;
+  opacity: 0.8 !important;
+  background: #f0f9ff !important;
+  color: #1e40af !important;
+  border: 2px solid #3b82f6 !important;
+  font-weight: 600 !important;
+  -webkit-text-fill-color: #1e40af !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
 .editor-sidebar table input {
   pointer-events: auto !important;
   cursor: text !important;

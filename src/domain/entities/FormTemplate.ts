@@ -164,6 +164,9 @@ export interface ApiConfiguration {
 // Configuración de numeración automática
 export interface NumerationConfig {
   enabled: boolean;
+  source: 'local' | 'api' | 'api-response'; // ⭐ Origen del folio: local, api externa, o respuesta de api de guardado
+  
+  // Configuración para folio LOCAL (generado por el sistema)
   type: 'sequential' | 'date-based' | 'custom';
   prefix?: string; // Ej: "INV-", "FORM-"
   suffix?: string;
@@ -173,6 +176,25 @@ export interface NumerationConfig {
   startFrom?: number;
   dateFormat?: string; // Para tipo date-based: "YYYYMMDD"
   customPattern?: string; // Ej: "{prefix}{date}-{seq}{suffix}"
+  
+  // ⭐ NUEVO: Configuración para folio desde API EXTERNA
+  apiEndpoint?: string; // URL del endpoint que genera folios
+  apiMethod?: 'GET' | 'POST'; // Método HTTP
+  apiHeaders?: Record<string, string>; // Headers personalizados
+  apiAuthentication?: {
+    type: 'none' | 'bearer' | 'apikey' | 'basic';
+    token?: string;
+    apiKey?: string;
+    apiKeyHeader?: string;
+    username?: string;
+    password?: string;
+  };
+  apiTimeout?: number; // Timeout en ms
+  apiResponsePath?: string; // Path en la respuesta JSON (ej: "data.folio" o "folioNumber")
+  apiPayload?: Record<string, any>; // Datos a enviar en POST (opcional)
+  
+  // ⭐ NUEVO: Configuración para folio desde API RESPONSE (respuesta de API de guardado)
+  apiResponseFolioPath?: string; // Path del folio en la respuesta de la API de guardado
 }
 
 // Mapeo de campos del formulario a la API

@@ -58,6 +58,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   previewNextFolio: (templateId: string) =>
     ipcRenderer.invoke('forms:previewNextFolio', templateId),
   
+  getFolioFromExternalApi: (templateId: string) =>
+    ipcRenderer.invoke('forms:getFolioFromExternalApi', templateId),
+  
   // Printing
   printForm: (htmlContent: string) =>
     ipcRenderer.invoke('print:form', htmlContent),
@@ -130,6 +133,7 @@ export type ElectronAPI = {
   retryFormSubmission: (submittedFormId: string) => Promise<any>;
   getNextSequenceNumber: (templateId: string) => Promise<any>;
   previewNextFolio: (templateId: string) => Promise<any>;
+  getFolioFromExternalApi: (templateId: string) => Promise<any>;
   printForm: (htmlContent: string) => Promise<any>;
   printWithBackground: (options?: any) => Promise<any>;
   selectFile: () => Promise<{ filePath: string; buffer: ArrayBuffer; type: string } | null>;

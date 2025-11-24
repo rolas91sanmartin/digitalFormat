@@ -111,24 +111,49 @@ const FormEditor: React.FC = () => {
     loadTemplate();
   }, [id]);
 
-  // Cargar vista previa del folio cuando se carga el template
+  // ⭐ ACTUALIZADO: Cargar vista previa del folio cuando se carga el template
   useEffect(() => {
     const loadFolioPreview = async () => {
       if (!template || !template.numerationConfig?.enabled || !template.numerationConfig.fieldId) {
         return;
       }
 
-      console.log('🔍 [FormEditor] Cargando vista previa del folio...');
-      const previewResult = await window.electronAPI.previewNextFolio(template.id);
+      const config = template.numerationConfig;
+      console.log('🔍 [FormEditor] Cargando vista previa del folio...', { source: config.source });
+      
+      // ⭐ NUEVO: Si es api-response, no cargar preview (se genera al imprimir)
+      if (config.source === 'api-response') {
+        console.log('📡 [FormEditor] Modo API Response: El folio se mostrará después de enviar');
+        setFieldValues(prev => ({
+          ...prev,
+          [config.fieldId]: '(se generará al imprimir)'
+        }));
+        return;
+      }
+      
+      let previewResult;
+      
+      // Determinar el origen del folio
+      if (config.source === 'api') {
+        // Obtener folio desde API externa
+        console.log('🌐 [FormEditor] Solicitando folio a API externa');
+        previewResult = await window.electronAPI.getFolioFromExternalApi(template.id);
+      } else {
+        // Folio local (comportamiento original)
+        console.log('💻 [FormEditor] Generando folio local');
+        previewResult = await window.electronAPI.previewNextFolio(template.id);
+      }
       
       if (previewResult.success && previewResult.formNumber) {
         console.log('👁️ [FormEditor] Vista previa del folio:', previewResult.formNumber);
         
         // Mostrar el folio en el campo configurado
-            setFieldValues(prev => ({
-              ...prev,
-              [template.numerationConfig!.fieldId]: previewResult.formNumber
-            }));
+        setFieldValues(prev => ({
+          ...prev,
+          [config.fieldId]: previewResult.formNumber
+        }));
+      } else {
+        console.error('❌ [FormEditor] Error obteniendo folio:', previewResult.error);
       }
     };
 
@@ -181,6 +206,15 @@ const FormEditor: React.FC = () => {
       setLoading(true);
       const result = await window.electronAPI.getFormTemplateById(id);
       if (result.success) {
+        // 🔍 DEBUG: Verificar configuración de numeración al cargar
+        console.log('🔍 [FormEditor] Template cargado:', result.template);
+        console.log('🔍 [FormEditor] Configuración de numeración:', result.template.numerationConfig);
+        if (result.template.numerationConfig) {
+          console.log('   - enabled:', result.template.numerationConfig.enabled);
+          console.log('   - fieldId:', result.template.numerationConfig.fieldId);
+          console.log('   - source:', result.template.numerationConfig.source);
+        }
+        
         // Separar campos originales de campos personalizados
         const allFields = result.template.fields || [];
         const originalFields: FormField[] = [];
@@ -573,17 +607,62 @@ const FormEditor: React.FC = () => {
         );
         
         console.log('✅ [FormEditor] Respuesta de submitForm:', submitResult);
+        console.log('🔍 [FormEditor] Detalles del submitResult:');
+        console.log('   - success:', submitResult.success);
+        console.log('   - formNumber:', submitResult.formNumber);
+        console.log('   - apiResponse:', submitResult.apiResponse);
+        console.log('   - error:', submitResult.error);
+        console.log('🔍 [FormEditor] Configuración de numeración:', template.numerationConfig);
         
         if (submitResult.success) {
-          // Actualizar el campo con el folio generado real (si hay numeración)
+          console.log('🎯 [FormEditor] submitResult.success es TRUE');
+          console.log('🎯 [FormEditor] submitResult.formNumber existe?:', !!submitResult.formNumber);
+          console.log('🎯 [FormEditor] submitResult.formNumber valor:', submitResult.formNumber);
+          console.log('🎯 [FormEditor] template.numerationConfig?.fieldId:', template.numerationConfig?.fieldId);
+          
+          // ⭐ GUARDAR el folio en una variable para usarlo después
+          let folioGenerado: string | null = null;
+          
+          // ⭐ ACTUALIZADO: Actualizar el campo con el folio ANTES de imprimir
           if (submitResult.formNumber && template.numerationConfig?.fieldId) {
-            setFieldValues(prev => ({
-              ...prev,
-              [template.numerationConfig!.fieldId]: submitResult.formNumber
-            }));
+            folioGenerado = submitResult.formNumber;
+            console.log('📝 [FormEditor] ✅ ENTRANDO A ACTUALIZAR CAMPO DEL FOLIO');
+            console.log('📝 [FormEditor] Folio generado guardado en variable:', folioGenerado);
+            console.log('📝 [FormEditor] Actualizando campo del folio:', {
+              fieldId: template.numerationConfig.fieldId,
+              folio: submitResult.formNumber,
+              source: template.numerationConfig.source,
+              valorAnterior: fieldValues[template.numerationConfig.fieldId]
+            });
             
-            // Esperar a que se actualice la UI con el folio
-            await new Promise(resolve => setTimeout(resolve, 300));
+            // ⭐ IMPORTANTE: Usar una función que preserve el valor
+            await new Promise<void>((resolve) => {
+              setFieldValues(prev => {
+                const newValues = {
+                  ...prev,
+                  [template.numerationConfig!.fieldId]: submitResult.formNumber!
+                };
+                console.log('📝 [FormEditor] Nuevo estado de fieldValues:', newValues);
+                // Resolver después de actualizar el estado
+                setTimeout(resolve, 0);
+                return newValues;
+              });
+            });
+            
+            // ⭐ Si es api-response, dar MÁS tiempo para que se actualice con el folio
+            const waitTime = template.numerationConfig.source === 'api-response' ? 1500 : 300;
+            
+            console.log('⏳ [FormEditor] Esperando', waitTime, 'ms para re-render...');
+            console.log('⏳ [FormEditor] Source:', template.numerationConfig.source);
+            
+            // Forzar varios ciclos de render
+            await new Promise(resolve => setTimeout(resolve, waitTime / 2));
+            await new Promise(requestAnimationFrame);
+            await new Promise(requestAnimationFrame);
+            await new Promise(requestAnimationFrame);
+            await new Promise(resolve => setTimeout(resolve, waitTime / 2));
+            
+            console.log('✅ [FormEditor] Esperando completado. Folio guardado:', folioGenerado);
           }
           
           let successMessage = '';
@@ -599,18 +678,11 @@ const FormEditor: React.FC = () => {
             setNotification({ message: successMessage, type: 'success' });
           }
 
-          // Después de imprimir exitosamente, cargar el siguiente folio para la próxima impresión
-          if (submitResult.formNumber && template.numerationConfig?.enabled && template.numerationConfig?.fieldId) {
-            setTimeout(async () => {
-              const nextPreview = await window.electronAPI.previewNextFolio(template.id);
-              if (nextPreview.success && nextPreview.formNumber && template.numerationConfig?.fieldId) {
-                setFieldValues(prev => ({
-                  ...prev,
-                  [template.numerationConfig!.fieldId]: nextPreview.formNumber
-                }));
-                console.log('👁️ [FormEditor] Próximo folio cargado:', nextPreview.formNumber);
-              }
-            }, 1000);
+          // ⭐ NOTA: NO resetear el folio aquí, se hará DESPUÉS de imprimir
+          // Guardar una referencia al folio para restaurarlo después
+          if (submitResult.formNumber && template.numerationConfig?.fieldId) {
+            // El folio ya está en el estado, no hacer nada aquí
+            console.log('📌 [FormEditor] Folio mantenido en el estado para impresión');
           }
         } else if (!submitResult.success) {
           setNotification({ 
@@ -627,9 +699,31 @@ const FormEditor: React.FC = () => {
       const wasDragMode = isDragMode;
       if (wasDragMode) setIsDragMode(false);
       
-      // Esperar un frame para que se aplique el cambio
-      await new Promise(requestAnimationFrame);
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // ⭐ ACTUALIZADO: Esperar más tiempo si es api-response para asegurar que el folio se renderice
+      const isApiResponse = template.numerationConfig?.enabled && 
+                            template.numerationConfig?.source === 'api-response';
+      
+      if (isApiResponse) {
+        console.log('⏳ [FormEditor] Esperando render completo del folio (api-response)...');
+        // Esperar varios frames para asegurar re-render completo
+        await new Promise(requestAnimationFrame);
+        await new Promise(requestAnimationFrame);
+        await new Promise(requestAnimationFrame);
+        await new Promise(resolve => setTimeout(resolve, 300));
+      } else {
+        // Tiempo normal para otros modos
+        await new Promise(requestAnimationFrame);
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      
+      console.log('🖨️ [FormEditor] ========================================');
+      console.log('🖨️ [FormEditor] INICIANDO IMPRESIÓN');
+      console.log('🖨️ [FormEditor] ========================================');
+      console.log('📋 [FormEditor] Valores actuales de campos (todos):', fieldValues);
+      if (template.numerationConfig?.fieldId) {
+        console.log('📋 [FormEditor] Valor del campo de folio específicamente:', fieldValues[template.numerationConfig.fieldId]);
+      }
+      console.log('🖨️ [FormEditor] ========================================');
       
       // Imprimir la vista actual con fondo
       const result = await window.electronAPI.printWithBackground({ 
@@ -639,6 +733,48 @@ const FormEditor: React.FC = () => {
       
       if (!result.success) {
         setNotification({ message: `Error al imprimir: ${result.error}`, type: 'error' });
+      } else {
+        console.log('✅ [FormEditor] Impresión completada exitosamente');
+        
+        // ⭐ DESPUÉS de imprimir, restaurar/preparar el siguiente folio según el modo
+        if (template.numerationConfig?.enabled && template.numerationConfig?.fieldId) {
+          if (template.numerationConfig.source === 'api-response') {
+            // Para api-response, resetear a placeholder
+            setTimeout(() => {
+              setFieldValues(prev => ({
+                ...prev,
+                [template.numerationConfig!.fieldId]: '(se generará al imprimir)'
+              }));
+              console.log('🔄 [FormEditor] Campo de folio reseteado a placeholder (api-response)');
+            }, 500);
+          } else if (template.numerationConfig.source === 'api') {
+            // Para API externa, obtener el siguiente folio
+            setTimeout(async () => {
+              console.log('🌐 [FormEditor] Solicitando siguiente folio a API externa');
+              const nextPreview = await window.electronAPI.getFolioFromExternalApi(template.id);
+              if (nextPreview.success && nextPreview.formNumber) {
+                setFieldValues(prev => ({
+                  ...prev,
+                  [template.numerationConfig!.fieldId]: nextPreview.formNumber
+                }));
+                console.log('👁️ [FormEditor] Próximo folio de API cargado:', nextPreview.formNumber);
+              }
+            }, 500);
+          } else {
+            // Para folio local, obtener el siguiente
+            setTimeout(async () => {
+              console.log('💻 [FormEditor] Generando siguiente folio local');
+              const nextPreview = await window.electronAPI.previewNextFolio(template.id);
+              if (nextPreview.success && nextPreview.formNumber) {
+                setFieldValues(prev => ({
+                  ...prev,
+                  [template.numerationConfig!.fieldId]: nextPreview.formNumber
+                }));
+                console.log('👁️ [FormEditor] Próximo folio local cargado:', nextPreview.formNumber);
+              }
+            }, 500);
+          }
+        }
       }
       
       // Restaurar modo drag si estaba activo
@@ -1183,56 +1319,175 @@ const FormEditor: React.FC = () => {
           </button>
 
           <div className="fields-list">
-            {template.fields?.map((field) => (
-              <div key={field.id} className="field-input-group">
-                <label>
-                  {field.name}
-                  {field.required && <span className="required">*</span>}
-                </label>
-                {field.type === 'textarea' ? (
-                  <textarea
-                    className="input"
-                    value={fieldValues[field.id] || ''}
-                    onChange={(e) => handleFieldChange(field.id, e.target.value)}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={(e) => e.stopPropagation()}
-                    onFocus={(e) => e.stopPropagation()}
-                    placeholder={field.placeholder}
-                    required={field.required}
-                    rows={3}
-                    disabled={false}
-                    readOnly={false}
-                  />
-                ) : field.type === 'checkbox' ? (
-                  <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={fieldValues[field.id] || false}
-                      onChange={(e) => handleFieldChange(field.id, e.target.checked)}
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onClick={(e) => e.stopPropagation()}
-                      onFocus={(e) => e.stopPropagation()}
-                      disabled={false}
-                    />
-                    <span>{field.placeholder || 'Marcar'}</span>
+            {template.fields?.map((field) => {
+              // ⭐ Determinar si este campo es el campo del folio/correlativo
+              const isFolioField = template.numerationConfig?.enabled && 
+                                   template.numerationConfig?.fieldId === field.id;
+              
+              return (
+                <div key={field.id} className="field-input-group">
+                  <label style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '0.5rem',
+                    color: isFolioField ? '#3b82f6' : 'inherit',
+                    fontWeight: isFolioField ? '600' : 'normal'
+                  }}>
+                    {field.name}
+                    {field.required && !isFolioField && <span className="required">*</span>}
+                    {isFolioField && (
+                      <span style={{
+                        fontSize: '0.75rem',
+                        padding: '2px 6px',
+                        backgroundColor: '#dbeafe',
+                        color: '#1e40af',
+                        borderRadius: '4px',
+                        fontWeight: '600'
+                      }}>
+                        🔢 Auto
+                      </span>
+                    )}
                   </label>
-                ) : (
-                  <input
-                    type={field.type}
-                    className="input"
-                    value={fieldValues[field.id] || ''}
-                    onChange={(e) => handleFieldChange(field.id, e.target.value)}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={(e) => e.stopPropagation()}
-                    onFocus={(e) => e.stopPropagation()}
-                    placeholder={field.placeholder}
-                    required={field.required}
-                    disabled={false}
-                    readOnly={false}
-                  />
-                )}
-              </div>
-            ))}
+                  {field.type === 'textarea' ? (
+                    <textarea
+                      className={isFolioField ? "input folio-field-disabled" : "input"}
+                      value={fieldValues[field.id] || ''}
+                      onChange={(e) => {
+                        // ⭐ Si es campo de folio, NO permitir cambios
+                        if (isFolioField) {
+                          e.preventDefault();
+                          return;
+                        }
+                        handleFieldChange(field.id, e.target.value);
+                      }}
+                      onKeyDown={(e) => {
+                        // ⭐ Si es campo de folio, bloquear TODAS las teclas
+                        if (isFolioField) {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          return false;
+                        }
+                      }}
+                      onMouseDown={(e) => {
+                        if (isFolioField) {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          return;
+                        }
+                        e.stopPropagation();
+                      }}
+                      onClick={(e) => {
+                        if (isFolioField) {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          return;
+                        }
+                        e.stopPropagation();
+                      }}
+                      onFocus={(e) => {
+                        if (isFolioField) {
+                          e.preventDefault();
+                          e.target.blur(); // Quitar el foco inmediatamente
+                          return;
+                        }
+                        e.stopPropagation();
+                      }}
+                      placeholder={field.placeholder}
+                      required={field.required && !isFolioField}
+                      rows={3}
+                      disabled={isFolioField}
+                      readOnly={isFolioField}
+                      style={isFolioField ? {
+                        backgroundColor: '#f0f9ff',
+                        color: '#1e40af',
+                        fontWeight: '600',
+                        cursor: 'not-allowed',
+                        borderColor: '#3b82f6',
+                        borderWidth: '2px',
+                        opacity: '0.8',
+                        pointerEvents: 'none'
+                      } : {}}
+                      title={isFolioField ? 'Este campo se llena automáticamente' : ''}
+                    />
+                  ) : field.type === 'checkbox' ? (
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={fieldValues[field.id] || false}
+                        onChange={(e) => handleFieldChange(field.id, e.target.checked)}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
+                        onFocus={(e) => e.stopPropagation()}
+                        disabled={isFolioField}
+                        title={isFolioField ? 'Este campo se llena automáticamente' : ''}
+                      />
+                      <span>{field.placeholder || 'Marcar'}</span>
+                    </label>
+                  ) : (
+                    <input
+                      type={field.type}
+                      className={isFolioField ? "input folio-field-disabled" : "input"}
+                      value={fieldValues[field.id] || ''}
+                      onChange={(e) => {
+                        // ⭐ Si es campo de folio, NO permitir cambios
+                        if (isFolioField) {
+                          e.preventDefault();
+                          return;
+                        }
+                        handleFieldChange(field.id, e.target.value);
+                      }}
+                      onKeyDown={(e) => {
+                        // ⭐ Si es campo de folio, bloquear TODAS las teclas
+                        if (isFolioField) {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          return false;
+                        }
+                      }}
+                      onMouseDown={(e) => {
+                        if (isFolioField) {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          return;
+                        }
+                        e.stopPropagation();
+                      }}
+                      onClick={(e) => {
+                        if (isFolioField) {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          return;
+                        }
+                        e.stopPropagation();
+                      }}
+                      onFocus={(e) => {
+                        if (isFolioField) {
+                          e.preventDefault();
+                          e.target.blur(); // Quitar el foco inmediatamente
+                          return;
+                        }
+                        e.stopPropagation();
+                      }}
+                      placeholder={field.placeholder}
+                      required={field.required && !isFolioField}
+                      disabled={isFolioField}
+                      readOnly={isFolioField}
+                      style={isFolioField ? {
+                        backgroundColor: '#f0f9ff',
+                        color: '#1e40af',
+                        fontWeight: '600',
+                        cursor: 'not-allowed',
+                        borderColor: '#3b82f6',
+                        borderWidth: '2px',
+                        opacity: '0.8',
+                        pointerEvents: 'none'
+                      } : {}}
+                      title={isFolioField ? 'Este campo se llena automáticamente' : ''}
+                    />
+                  )}
+                </div>
+              );
+            })}
 
             {/* Campos Personalizados - ANTES de las tablas */}
             {customFields.length > 0 && (
@@ -1240,78 +1495,156 @@ const FormEditor: React.FC = () => {
                 <h3 style={{ marginTop: '2rem', marginBottom: '1rem', color: '#10b981' }}>
                   📝 Campos Personalizados
                 </h3>
-                {customFields.map((field) => (
-                  <div key={field.id} className="field-input-group">
-                    {editingFieldId === field.id ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                        <input
-                          type="text"
-                          value={editingFieldName}
-                          onChange={(e) => setEditingFieldName(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleSaveFieldName();
-                            if (e.key === 'Escape') handleCancelEditFieldName();
-                          }}
-                          onBlur={handleSaveFieldName}
-                          autoFocus
-                          style={{
-                            flex: 1,
-                            padding: '0.25rem 0.5rem',
-                            border: '2px solid #10b981',
-                            borderRadius: '4px',
-                            fontSize: '0.9rem',
+                {customFields.map((field) => {
+                  // ⭐ Determinar si este campo personalizado es el campo del folio
+                  const isFolioField = template.numerationConfig?.enabled && 
+                                       template.numerationConfig?.fieldId === field.id;
+                  
+                  // 🔍 DEBUG: Logs para verificar detección
+                  if (field.id === template.numerationConfig?.fieldId) {
+                    console.log('🔍 [FormEditor] Verificando campo de folio:', {
+                      fieldId: field.id,
+                      fieldName: field.name,
+                      numerationEnabled: template.numerationConfig?.enabled,
+                      configuredFieldId: template.numerationConfig?.fieldId,
+                      isFolioField: isFolioField,
+                      shouldBeDisabled: isFolioField
+                    });
+                  }
+                  
+                  return (
+                    <div key={field.id} className="field-input-group">
+                      {editingFieldId === field.id ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                          <input
+                            type="text"
+                            value={editingFieldName}
+                            onChange={(e) => setEditingFieldName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveFieldName();
+                              if (e.key === 'Escape') handleCancelEditFieldName();
+                            }}
+                            onBlur={handleSaveFieldName}
+                            autoFocus
+                            style={{
+                              flex: 1,
+                              padding: '0.25rem 0.5rem',
+                              border: '2px solid #10b981',
+                              borderRadius: '4px',
+                              fontSize: '0.9rem',
+                              fontWeight: '600',
+                              color: '#10b981'
+                            }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </div>
+                      ) : (
+                        <label 
+                          style={{ 
+                            color: isFolioField ? '#3b82f6' : '#10b981', 
                             fontWeight: '600',
-                            color: '#10b981'
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                            padding: '0.25rem 0.5rem',
+                            borderRadius: '4px',
+                            transition: 'background-color 0.2s'
                           }}
-                          onMouseDown={(e) => e.stopPropagation()}
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      </div>
-                    ) : (
-                      <label 
-                        style={{ 
-                          color: '#10b981', 
-                          fontWeight: '600',
-                          cursor: 'pointer',
-                          display: 'inline-block',
-                          padding: '0.25rem 0.5rem',
-                          borderRadius: '4px',
-                          transition: 'background-color 0.2s'
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleStartEditFieldName(field.id, field.name);
+                          }}
+                          onMouseEnter={(e) => {
+                            (e.target as HTMLElement).style.backgroundColor = isFolioField ? '#dbeafe' : '#d1fae5';
+                          }}
+                          onMouseLeave={(e) => {
+                            (e.target as HTMLElement).style.backgroundColor = 'transparent';
+                          }}
+                          title={isFolioField ? 'Campo de folio auto-generado' : 'Haz clic para editar el nombre'}
+                        >
+                          {field.name}
+                          {isFolioField && (
+                            <span style={{
+                              fontSize: '0.75rem',
+                              padding: '2px 6px',
+                              backgroundColor: '#dbeafe',
+                              color: '#1e40af',
+                              borderRadius: '4px',
+                              fontWeight: '600'
+                            }}>
+                              🔢 Auto
+                            </span>
+                          )}
+                        </label>
+                      )}
+                      <input
+                        type="text"
+                        className={isFolioField ? "input folio-field-disabled" : "input"}
+                        value={fieldValues[field.id] || ''}
+                        onChange={(e) => {
+                          // ⭐ Si es campo de folio, NO permitir cambios
+                          if (isFolioField) {
+                            e.preventDefault();
+                            return;
+                          }
+                          handleFieldChange(field.id, e.target.value);
+                        }}
+                        onKeyDown={(e) => {
+                          // ⭐ Si es campo de folio, bloquear TODAS las teclas
+                          if (isFolioField) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            return false;
+                          }
+                        }}
+                        onMouseDown={(e) => {
+                          if (isFolioField) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            return;
+                          }
+                          e.stopPropagation();
                         }}
                         onClick={(e) => {
-                          e.preventDefault();
+                          if (isFolioField) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            return;
+                          }
                           e.stopPropagation();
-                          handleStartEditFieldName(field.id, field.name);
                         }}
-                        onMouseEnter={(e) => {
-                          (e.target as HTMLElement).style.backgroundColor = '#d1fae5';
+                        onFocus={(e) => {
+                          if (isFolioField) {
+                            e.preventDefault();
+                            e.target.blur(); // Quitar el foco inmediatamente
+                            return;
+                          }
+                          e.stopPropagation();
                         }}
-                        onMouseLeave={(e) => {
-                          (e.target as HTMLElement).style.backgroundColor = 'transparent';
+                        placeholder={field.placeholder}
+                        disabled={isFolioField}
+                        readOnly={isFolioField}
+                        style={isFolioField ? { 
+                          backgroundColor: '#f0f9ff',
+                          color: '#1e40af',
+                          fontWeight: '600',
+                          cursor: 'not-allowed',
+                          borderColor: '#3b82f6',
+                          borderWidth: '2px',
+                          opacity: '0.8',
+                          pointerEvents: 'none'
+                        } : { 
+                          borderColor: '#10b981',
+                          borderWidth: '2px'
                         }}
-                        title="Haz clic para editar el nombre"
-                      >
-                        {field.name}
-                      </label>
-                    )}
-                    <input
-                      type="text"
-                      className="input"
-                      value={fieldValues[field.id] || ''}
-                      onChange={(e) => handleFieldChange(field.id, e.target.value)}
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onClick={(e) => e.stopPropagation()}
-                      onFocus={(e) => e.stopPropagation()}
-                      placeholder={field.placeholder}
-                      disabled={false}
-                      readOnly={false}
-                      style={{ 
-                        borderColor: '#10b981',
-                        borderWidth: '2px'
-                      }}
-                    />
-                  </div>
-                ))}
+                        title={isFolioField ? 'Este campo se llena automáticamente' : ''}
+                      />
+                    </div>
+                  );
+                })}
               </>
             )}
 

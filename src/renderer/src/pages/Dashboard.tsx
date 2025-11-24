@@ -184,7 +184,12 @@ const Dashboard: React.FC = () => {
           tables: template.tables || [],
           staticElements: template.staticElements || [],
           pageSize: template.pageSize || { width: 794, height: 1123 },
-          renderMode: template.renderMode || 'hybrid'
+          renderMode: template.renderMode || 'hybrid',
+          // ⭐ CONFIGURACIONES COMPLETAS
+          apiConfiguration: template.apiConfiguration || null,
+          numerationConfig: template.numerationConfig || null,
+          fieldMappings: template.fieldMappings || [],
+          tableMappings: template.tableMappings || []
         }
       };
 

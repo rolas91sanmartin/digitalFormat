@@ -209,7 +209,12 @@ export function setupIpcHandlers() {
         tables: data.templateData.tables || [],
         staticElements: data.templateData.staticElements || [],
         pageSize: data.templateData.pageSize || { width: 794, height: 1123 },
-        renderMode: data.templateData.renderMode || 'hybrid' as 'hybrid' | 'html-only' | 'image-overlay'
+        renderMode: data.templateData.renderMode || 'hybrid' as 'hybrid' | 'html-only' | 'image-overlay',
+        // ⭐ INCLUIR TODAS LAS CONFIGURACIONES
+        apiConfiguration: data.templateData.apiConfiguration || undefined,
+        numerationConfig: data.templateData.numerationConfig || undefined,
+        fieldMappings: data.templateData.fieldMappings || [],
+        tableMappings: data.templateData.tableMappings || []
       };
 
       const template = await formTemplateRepository.create(templateData);
@@ -368,6 +373,123 @@ export function setupIpcHandlers() {
       return { success: true, formNumber };
     } catch (error: any) {
       return { success: false, error: error.message };
+    }
+  });
+
+  // ⭐ NUEVO: Obtener folio desde API externa del cliente
+  ipcMain.handle('forms:getFolioFromExternalApi', async (_event, templateId) => {
+    try {
+      const template = await formTemplateRepository.findById(templateId);
+      if (!template || !template.numerationConfig?.enabled) {
+        return { success: false, error: 'Numeración no configurada' };
+      }
+
+      const config = template.numerationConfig;
+      
+      // Validar que tenga configuración de API
+      if (config.source !== 'api' || !config.apiEndpoint) {
+        return { success: false, error: 'Configuración de API externa no disponible' };
+      }
+
+      console.log('🌐 Solicitando folio a API externa:', config.apiEndpoint);
+
+      // Preparar headers
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...config.apiHeaders
+      };
+
+      // Agregar autenticación si está configurada
+      if (config.apiAuthentication) {
+        const auth = config.apiAuthentication;
+        
+        if (auth.type === 'bearer' && auth.token) {
+          headers['Authorization'] = `Bearer ${auth.token}`;
+        } else if (auth.type === 'apikey' && auth.apiKey && auth.apiKeyHeader) {
+          headers[auth.apiKeyHeader] = auth.apiKey;
+        } else if (auth.type === 'basic' && auth.username && auth.password) {
+          const credentials = Buffer.from(`${auth.username}:${auth.password}`).toString('base64');
+          headers['Authorization'] = `Basic ${credentials}`;
+        }
+      }
+
+      // Preparar opciones de fetch
+      const fetchOptions: RequestInit = {
+        method: config.apiMethod || 'GET',
+        headers,
+        signal: AbortSignal.timeout(config.apiTimeout || 10000) // Default 10 segundos
+      };
+
+      // Agregar body si es POST
+      if (config.apiMethod === 'POST' && config.apiPayload) {
+        fetchOptions.body = JSON.stringify(config.apiPayload);
+      }
+
+      // Hacer la petición
+      const response = await fetch(config.apiEndpoint, fetchOptions);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Error en API externa:', response.status, errorText);
+        return { 
+          success: false, 
+          error: `API respondió con status ${response.status}: ${errorText}` 
+        };
+      }
+
+      const responseData: any = await response.json();
+      console.log('✅ Respuesta de API externa:', responseData);
+
+      // Extraer el folio usando el path configurado
+      let folio: string;
+      
+      if (config.apiResponsePath) {
+        // Navegar por el path (ej: "data.folio" -> responseData.data.folio)
+        const pathParts = config.apiResponsePath.split('.');
+        let value: any = responseData;
+        
+        for (const part of pathParts) {
+          if (value && typeof value === 'object' && part in value) {
+            value = value[part];
+          } else {
+            return { 
+              success: false, 
+              error: `No se encontró el folio en el path: ${config.apiResponsePath}` 
+            };
+          }
+        }
+        
+        folio = String(value);
+      } else {
+        // Si no hay path, asumir que la respuesta es el folio directamente
+        // O buscar campos comunes
+        if (typeof responseData === 'string') {
+          folio = responseData;
+        } else if (responseData.folio) {
+          folio = String(responseData.folio);
+        } else if (responseData.folioNumber) {
+          folio = String(responseData.folioNumber);
+        } else if (responseData.number) {
+          folio = String(responseData.number);
+        } else if (responseData.data?.folio) {
+          folio = String(responseData.data.folio);
+        } else {
+          return { 
+            success: false, 
+            error: 'No se pudo extraer el folio de la respuesta. Configure apiResponsePath.' 
+          };
+        }
+      }
+
+      console.log('📋 Folio obtenido:', folio);
+      return { success: true, formNumber: folio };
+      
+    } catch (error: any) {
+      console.error('❌ Error al obtener folio de API externa:', error);
+      return { 
+        success: false, 
+        error: error.message || 'Error al conectar con la API externa' 
+      };
     }
   });
 

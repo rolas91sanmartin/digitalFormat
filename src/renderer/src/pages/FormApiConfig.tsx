@@ -26,12 +26,30 @@ const FormApiConfig: React.FC = () => {
 
   // Configuración de numeración
   const [numerationEnabled, setNumerationEnabled] = useState(false);
+  const [numerationSource, setNumerationSource] = useState<'local' | 'api' | 'api-response'>('local'); // ⭐ Tres modos
   const [numerationType, setNumerationType] = useState<'sequential' | 'date-based'>('sequential');
   const [numerationPrefix, setNumerationPrefix] = useState('');
   const [numerationSuffix, setNumerationSuffix] = useState('');
   const [numerationPadding, setNumerationPadding] = useState(5);
   const [numerationStartFrom, setNumerationStartFrom] = useState(1);
   const [numerationFieldId, setNumerationFieldId] = useState('');
+  
+  // ⭐ NUEVO: Configuración para folio desde API externa
+  const [folioApiEndpoint, setFolioApiEndpoint] = useState('');
+  const [folioApiMethod, setFolioApiMethod] = useState<'GET' | 'POST'>('GET');
+  const [folioApiHeaders, setFolioApiHeaders] = useState<Array<{ key: string; value: string }>>([]);
+  const [folioAuthType, setFolioAuthType] = useState<'none' | 'bearer' | 'apikey' | 'basic'>('none');
+  const [folioAuthToken, setFolioAuthToken] = useState('');
+  const [folioApiKeyHeader, setFolioApiKeyHeader] = useState('X-API-Key');
+  const [folioApiKeyValue, setFolioApiKeyValue] = useState('');
+  const [folioBasicUsername, setFolioBasicUsername] = useState('');
+  const [folioBasicPassword, setFolioBasicPassword] = useState('');
+  const [folioApiTimeout, setFolioApiTimeout] = useState(10000);
+  const [folioResponsePath, setFolioResponsePath] = useState('');
+  const [folioApiPayload, setFolioApiPayload] = useState('');
+  
+  // ⭐ NUEVO: Configuración para folio desde API Response
+  const [apiResponseFolioPath, setApiResponseFolioPath] = useState('');
 
   // Field mappings
   const [fieldMappings, setFieldMappings] = useState<any[]>([]);
@@ -84,12 +102,49 @@ const FormApiConfig: React.FC = () => {
         if (tmpl.numerationConfig) {
           const num = tmpl.numerationConfig;
           setNumerationEnabled(num.enabled);
+          setNumerationSource(num.source || 'local'); // ⭐ NUEVO
           setNumerationType(num.type || 'sequential');
           setNumerationPrefix(num.prefix || '');
           setNumerationSuffix(num.suffix || '');
           setNumerationPadding(num.padding || 5);
           setNumerationStartFrom(num.startFrom || 1);
           setNumerationFieldId(num.fieldId || '');
+          
+          // ⭐ NUEVO: Cargar configuración de API externa
+          if (num.source === 'api') {
+            setFolioApiEndpoint(num.apiEndpoint || '');
+            setFolioApiMethod(num.apiMethod || 'GET');
+            setFolioAuthType(num.apiAuthentication?.type || 'none');
+            setFolioAuthToken(num.apiAuthentication?.token || '');
+            setFolioApiKeyHeader(num.apiAuthentication?.apiKeyHeader || 'X-API-Key');
+            setFolioApiKeyValue(num.apiAuthentication?.apiKey || '');
+            setFolioBasicUsername(num.apiAuthentication?.username || '');
+            setFolioBasicPassword(num.apiAuthentication?.password || '');
+            setFolioApiTimeout(num.apiTimeout || 10000);
+            setFolioResponsePath(num.apiResponsePath || '');
+            
+            // Cargar payload (si es JSON string, parsearlo)
+            if (num.apiPayload) {
+              const payloadStr = typeof num.apiPayload === 'string' 
+                ? num.apiPayload 
+                : JSON.stringify(num.apiPayload, null, 2);
+              setFolioApiPayload(payloadStr);
+            }
+            
+            // Cargar headers personalizados para folio API
+            if (num.apiHeaders && typeof num.apiHeaders === 'object') {
+              const headersArray = Object.entries(num.apiHeaders).map(([key, value]) => ({
+                key,
+                value: String(value)
+              }));
+              setFolioApiHeaders(headersArray);
+            }
+          }
+          
+          // ⭐ NUEVO: Cargar configuración de API Response
+          if (num.source === 'api-response') {
+            setApiResponseFolioPath(num.apiResponseFolioPath || '');
+          }
         }
 
         if (tmpl.fieldMappings) {
@@ -174,16 +229,82 @@ const FormApiConfig: React.FC = () => {
         timeout: 30000
       } : undefined;
 
-      const numerationConfig = numerationEnabled ? {
-        enabled: true,
-        type: numerationType,
-        prefix: numerationPrefix,
-        suffix: numerationSuffix,
-        padding: numerationPadding,
-        fieldId: numerationFieldId,
-        autoIncrement: true,
-        startFrom: numerationStartFrom
-      } : undefined;
+      // ⭐ NUEVO: Construir configuración de numeración con soporte para API externa
+      let numerationConfig = undefined;
+      if (numerationEnabled) {
+        // Configuración base
+        numerationConfig = {
+          enabled: true,
+          source: numerationSource,
+          type: numerationType,
+          prefix: numerationPrefix,
+          suffix: numerationSuffix,
+          padding: numerationPadding,
+          fieldId: numerationFieldId,
+          autoIncrement: true,
+          startFrom: numerationStartFrom
+        };
+        
+        // Si el origen es API externa, agregar configuración adicional
+        if (numerationSource === 'api') {
+          // Convertir headers de folio API a objeto
+          const folioHeadersObject: Record<string, string> = {};
+          folioApiHeaders.forEach(header => {
+            if (header.key.trim() && header.value.trim()) {
+              folioHeadersObject[header.key.trim()] = header.value.trim();
+            }
+          });
+          
+          // Parsear payload si es JSON string
+          let parsedPayload = undefined;
+          if (folioApiPayload && folioApiPayload.trim()) {
+            try {
+              parsedPayload = JSON.parse(folioApiPayload);
+            } catch (e) {
+              Swal.fire('Error', 'El payload del API de folio debe ser un JSON válido', 'error');
+              return;
+            }
+          }
+          
+          numerationConfig = {
+            ...numerationConfig,
+            apiEndpoint: folioApiEndpoint,
+            apiMethod: folioApiMethod,
+            apiHeaders: folioHeadersObject,
+            apiAuthentication: {
+              type: folioAuthType,
+              ...(folioAuthType === 'bearer' && { token: folioAuthToken }),
+              ...(folioAuthType === 'apikey' && { 
+                apiKeyHeader: folioApiKeyHeader, 
+                apiKey: folioApiKeyValue 
+              }),
+              ...(folioAuthType === 'basic' && { 
+                username: folioBasicUsername, 
+                password: folioBasicPassword 
+              })
+            },
+            apiTimeout: folioApiTimeout,
+            apiResponsePath: folioResponsePath,
+            ...(parsedPayload && { apiPayload: parsedPayload })
+          };
+        }
+        
+        // ⭐ NUEVO: Si el origen es API Response (respuesta de API de guardado)
+        if (numerationSource === 'api-response') {
+          if (!apiEnabled) {
+            Swal.fire('Error', 'Debe habilitar la configuración de API para usar este modo de folio', 'error');
+            return;
+          }
+          if (!apiResponseFolioPath.trim()) {
+            Swal.fire('Error', 'Debe especificar el path del folio en la respuesta de la API', 'error');
+            return;
+          }
+          numerationConfig = {
+            ...numerationConfig,
+            apiResponseFolioPath: apiResponseFolioPath.trim()
+          };
+        }
+      }
 
       console.log('💾 Guardando tableMappings:', tableMappings);
       console.log('💾 Guardando custom headers:', headersObject);
@@ -246,6 +367,21 @@ const FormApiConfig: React.FC = () => {
 
   const removeCustomHeader = (index: number) => {
     setCustomHeaders(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // ⭐ NUEVO: Funciones para manejar headers de API de folio
+  const addFolioApiHeader = () => {
+    setFolioApiHeaders(prev => [...prev, { key: '', value: '' }]);
+  };
+
+  const updateFolioApiHeader = (index: number, field: 'key' | 'value', value: string) => {
+    setFolioApiHeaders(prev => prev.map((header, i) => 
+      i === index ? { ...header, [field]: value } : header
+    ));
+  };
+
+  const removeFolioApiHeader = (index: number) => {
+    setFolioApiHeaders(prev => prev.filter((_, i) => i !== index));
   };
 
   const generateJsonPreview = () => {
@@ -749,66 +885,406 @@ const FormApiConfig: React.FC = () => {
 
           {numerationEnabled && (
             <>
-              <div style={{ marginBottom: '15px' }}>
-                <label>Tipo:</label>
-                <select 
-                  className="input"
-                  value={numerationType}
-                  onChange={(e) => setNumerationType(e.target.value as any)}
-                >
-                  <option value="sequential">Secuencial (001, 002, 003...)</option>
-                  <option value="date-based">Basado en fecha (20231112-001)</option>
-                </select>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
-                <div>
-                  <label>Prefijo:</label>
-                  <input 
-                    type="text"
-                    className="input"
-                    placeholder="FORM-"
-                    value={numerationPrefix}
-                    onChange={(e) => setNumerationPrefix(e.target.value)}
-                  />
+              {/* ⭐ NUEVO: Selector de origen del folio */}
+              <div style={{ marginBottom: '25px', padding: '15px', background: '#f9fafb', borderRadius: '8px', border: '2px solid #e5e7eb' }}>
+                <label style={{ display: 'block', marginBottom: '10px', fontWeight: '600', fontSize: '15px' }}>
+                  🎯 Origen del Folio:
+                </label>
+                <div style={{ display: 'flex', gap: '20px', marginBottom: '15px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', padding: '10px 15px', background: numerationSource === 'local' ? '#dbeafe' : 'white', border: `2px solid ${numerationSource === 'local' ? '#3b82f6' : '#d1d5db'}`, borderRadius: '6px', flex: 1 }}>
+                    <input 
+                      type="radio"
+                      name="numerationSource"
+                      value="local"
+                      checked={numerationSource === 'local'}
+                      onChange={(e) => setNumerationSource('local')}
+                      style={{ marginRight: '8px' }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: '600', marginBottom: '2px' }}>💻 Local</div>
+                      <div style={{ fontSize: '12px', color: '#6b7280' }}>Generado por este sistema</div>
+                    </div>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', padding: '10px 15px', background: numerationSource === 'api' ? '#dbeafe' : 'white', border: `2px solid ${numerationSource === 'api' ? '#3b82f6' : '#d1d5db'}`, borderRadius: '6px', flex: 1 }}>
+                    <input 
+                      type="radio"
+                      name="numerationSource"
+                      value="api"
+                      checked={numerationSource === 'api'}
+                      onChange={(e) => setNumerationSource('api')}
+                      style={{ marginRight: '8px' }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: '600', marginBottom: '2px' }}>🌐 API Externa</div>
+                      <div style={{ fontSize: '12px', color: '#6b7280' }}>Endpoint dedicado para generar folios</div>
+                    </div>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', padding: '10px 15px', background: numerationSource === 'api-response' ? '#dbeafe' : 'white', border: `2px solid ${numerationSource === 'api-response' ? '#3b82f6' : '#d1d5db'}`, borderRadius: '6px', flex: 1 }}>
+                    <input 
+                      type="radio"
+                      name="numerationSource"
+                      value="api-response"
+                      checked={numerationSource === 'api-response'}
+                      onChange={(e) => setNumerationSource('api-response')}
+                      style={{ marginRight: '8px' }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: '600', marginBottom: '2px' }}>📡 Respuesta de API</div>
+                      <div style={{ fontSize: '12px', color: '#6b7280' }}>Folio retornado por API de guardado</div>
+                    </div>
+                  </label>
                 </div>
-                <div>
-                  <label>Sufijo:</label>
-                  <input 
-                    type="text"
-                    className="input"
-                    placeholder="-2024"
-                    value={numerationSuffix}
-                    onChange={(e) => setNumerationSuffix(e.target.value)}
-                  />
+                
+                <div style={{ padding: '10px', background: '#fef3c7', borderRadius: '6px', border: '1px solid #fbbf24' }}>
+                  <div style={{ fontSize: '13px', color: '#92400e' }}>
+                    <strong>💡 Recomendación:</strong> {numerationSource === 'local' 
+                      ? 'Ideal para una sola instalación o cuando no necesitas folios centralizados.' 
+                      : numerationSource === 'api'
+                      ? 'Perfecto para múltiples instalaciones que requieren folios únicos centralizados.'
+                      : 'Usa el folio que tu API de guardado retorna. Requiere tener la API configurada.'}
+                  </div>
                 </div>
               </div>
 
-              <div style={{ marginBottom: '15px' }}>
-                <label>Cantidad de ceros (padding):</label>
-                <input 
-                  type="number"
-                  className="input"
-                  min="1"
-                  max="10"
-                  value={numerationPadding}
-                  onChange={(e) => setNumerationPadding(parseInt(e.target.value))}
-                />
-              </div>
+              {/* Configuración LOCAL */}
+              {numerationSource === 'local' && (
+                <>
+                  <div style={{ marginBottom: '15px' }}>
+                    <label>Tipo:</label>
+                    <select 
+                      className="input"
+                      value={numerationType}
+                      onChange={(e) => setNumerationType(e.target.value as any)}
+                    >
+                      <option value="sequential">Secuencial (001, 002, 003...)</option>
+                      <option value="date-based">Basado en fecha (20231112-001)</option>
+                    </select>
+                  </div>
+                </>
+              )}
 
-              <div style={{ marginBottom: '15px' }}>
-                <label>Iniciar desde:</label>
-                <input 
-                  type="number"
-                  className="input"
-                  min="1"
-                  value={numerationStartFrom}
-                  onChange={(e) => setNumerationStartFrom(parseInt(e.target.value))}
-                />
-              </div>
+              {/* ⭐ NUEVO: Configuración API EXTERNA */}
+              {numerationSource === 'api' && (
+                <div style={{ marginBottom: '20px', padding: '15px', background: '#f0f9ff', borderRadius: '8px', border: '1px solid #3b82f6' }}>
+                  <h3 style={{ marginTop: 0, marginBottom: '15px', color: '#1e40af' }}>🌐 Configuración de API Externa</h3>
+                  
+                  <div style={{ marginBottom: '15px' }}>
+                    <label>Endpoint URL: *</label>
+                    <input 
+                      type="text"
+                      className="input"
+                      placeholder="https://api.ejemplo.com/generate-folio"
+                      value={folioApiEndpoint}
+                      onChange={(e) => setFolioApiEndpoint(e.target.value)}
+                      style={{ width: '100%' }}
+                    />
+                  </div>
 
+                  <div style={{ marginBottom: '15px' }}>
+                    <label>Método HTTP:</label>
+                    <select 
+                      className="input"
+                      value={folioApiMethod}
+                      onChange={(e) => setFolioApiMethod(e.target.value as 'GET' | 'POST')}
+                    >
+                      <option value="GET">GET</option>
+                      <option value="POST">POST</option>
+                    </select>
+                  </div>
+
+                  {folioApiMethod === 'POST' && (
+                    <div style={{ marginBottom: '15px' }}>
+                      <label>Payload (JSON):</label>
+                      <textarea 
+                        className="input"
+                        placeholder='{"templateId": "example"}'
+                        value={folioApiPayload}
+                        onChange={(e) => setFolioApiPayload(e.target.value)}
+                        rows={4}
+                        style={{ width: '100%', fontFamily: 'monospace', fontSize: '13px' }}
+                      />
+                    </div>
+                  )}
+
+                  <div style={{ marginBottom: '15px' }}>
+                    <label>Autenticación:</label>
+                    <select 
+                      className="input"
+                      value={folioAuthType}
+                      onChange={(e) => setFolioAuthType(e.target.value as any)}
+                    >
+                      <option value="none">Sin autenticación</option>
+                      <option value="bearer">Bearer Token</option>
+                      <option value="apikey">API Key</option>
+                      <option value="basic">Basic Auth</option>
+                    </select>
+                  </div>
+
+                  {folioAuthType === 'bearer' && (
+                    <div style={{ marginBottom: '15px' }}>
+                      <label>Token:</label>
+                      <input 
+                        type="password"
+                        className="input"
+                        placeholder="tu-token-secreto"
+                        value={folioAuthToken}
+                        onChange={(e) => setFolioAuthToken(e.target.value)}
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+                  )}
+
+                  {folioAuthType === 'apikey' && (
+                    <>
+                      <div style={{ marginBottom: '15px' }}>
+                        <label>Nombre del Header:</label>
+                        <input 
+                          type="text"
+                          className="input"
+                          placeholder="X-API-Key"
+                          value={folioApiKeyHeader}
+                          onChange={(e) => setFolioApiKeyHeader(e.target.value)}
+                        />
+                      </div>
+                      <div style={{ marginBottom: '15px' }}>
+                        <label>API Key:</label>
+                        <input 
+                          type="password"
+                          className="input"
+                          placeholder="tu-api-key"
+                          value={folioApiKeyValue}
+                          onChange={(e) => setFolioApiKeyValue(e.target.value)}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {folioAuthType === 'basic' && (
+                    <>
+                      <div style={{ marginBottom: '15px' }}>
+                        <label>Usuario:</label>
+                        <input 
+                          type="text"
+                          className="input"
+                          placeholder="usuario"
+                          value={folioBasicUsername}
+                          onChange={(e) => setFolioBasicUsername(e.target.value)}
+                        />
+                      </div>
+                      <div style={{ marginBottom: '15px' }}>
+                        <label>Contraseña:</label>
+                        <input 
+                          type="password"
+                          className="input"
+                          placeholder="contraseña"
+                          value={folioBasicPassword}
+                          onChange={(e) => setFolioBasicPassword(e.target.value)}
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  <div style={{ marginBottom: '15px' }}>
+                    <label>Headers Personalizados:</label>
+                    {folioApiHeaders.map((header, index) => (
+                      <div key={index} style={{ display: 'flex', gap: '10px', marginBottom: '8px' }}>
+                        <input 
+                          type="text"
+                          className="input"
+                          placeholder="Header-Name"
+                          value={header.key}
+                          onChange={(e) => updateFolioApiHeader(index, 'key', e.target.value)}
+                          style={{ flex: 1 }}
+                        />
+                        <input 
+                          type="text"
+                          className="input"
+                          placeholder="value"
+                          value={header.value}
+                          onChange={(e) => updateFolioApiHeader(index, 'value', e.target.value)}
+                          style={{ flex: 1 }}
+                        />
+                        <button 
+                          className="btn"
+                          onClick={() => removeFolioApiHeader(index)}
+                          style={{ padding: '0 15px' }}
+                        >
+                          ❌
+                        </button>
+                      </div>
+                    ))}
+                    <button 
+                      className="btn"
+                      onClick={addFolioApiHeader}
+                      style={{ fontSize: '14px', padding: '6px 12px' }}
+                    >
+                      + Agregar Header
+                    </button>
+                  </div>
+
+                  <div style={{ marginBottom: '15px' }}>
+                    <label>Timeout (ms):</label>
+                    <input 
+                      type="number"
+                      className="input"
+                      min="1000"
+                      max="60000"
+                      value={folioApiTimeout}
+                      onChange={(e) => setFolioApiTimeout(parseInt(e.target.value))}
+                    />
+                    <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                      Tiempo máximo de espera para la respuesta del servidor
+                    </div>
+                  </div>
+
+                  <div style={{ marginBottom: '15px' }}>
+                    <label>Path del Folio en Respuesta: *</label>
+                    <input 
+                      type="text"
+                      className="input"
+                      placeholder="data.folio o folioNumber"
+                      value={folioResponsePath}
+                      onChange={(e) => setFolioResponsePath(e.target.value)}
+                      style={{ width: '100%' }}
+                    />
+                    <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                      Ruta en el JSON de respuesta donde se encuentra el folio (ej: "data.folio" o "folioNumber")
+                    </div>
+                  </div>
+
+                  <div style={{ padding: '12px', background: '#fef3c7', borderRadius: '6px', border: '1px solid #fbbf24' }}>
+                    <div style={{ fontSize: '13px', color: '#92400e' }}>
+                      <strong>📝 Ejemplo de respuesta esperada:</strong><br/>
+                      <code style={{ display: 'block', marginTop: '5px', padding: '8px', background: 'white', borderRadius: '4px', fontSize: '12px' }}>
+                        {`{ "data": { "folio": "FORM-00123" } }`}
+                      </code>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ⭐ NUEVO: Configuración API RESPONSE */}
+              {numerationSource === 'api-response' && (
+                <div style={{ marginBottom: '20px', padding: '15px', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #10b981' }}>
+                  <h3 style={{ marginTop: 0, marginBottom: '15px', color: '#065f46' }}>📡 Configuración de Folio desde Respuesta</h3>
+                  
+                  <div style={{ marginBottom: '15px', padding: '12px', background: '#dbeafe', borderRadius: '6px', border: '1px solid #3b82f6' }}>
+                    <div style={{ fontSize: '13px', color: '#1e40af', marginBottom: '8px' }}>
+                      <strong>ℹ️ Cómo funciona:</strong>
+                    </div>
+                    <ol style={{ margin: 0, paddingLeft: '20px', fontSize: '13px', color: '#1e40af' }}>
+                      <li>El usuario imprime el formulario</li>
+                      <li>Los datos se envían a la API configurada arriba</li>
+                      <li>La API procesa, guarda y responde con un folio</li>
+                      <li>El folio se extrae y se muestra en el campo configurado</li>
+                      <li>El documento se imprime con ese folio</li>
+                    </ol>
+                  </div>
+                  
+                  {!apiEnabled && (
+                    <div style={{ marginBottom: '15px', padding: '12px', background: '#fee2e2', borderRadius: '6px', border: '1px solid #ef4444' }}>
+                      <div style={{ fontSize: '13px', color: '#991b1b' }}>
+                        <strong>⚠️ Advertencia:</strong> Debes habilitar y configurar la API de guardado arriba para usar este modo.
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div style={{ marginBottom: '15px' }}>
+                    <label>Path del Folio en Respuesta: *</label>
+                    <input 
+                      type="text"
+                      className="input"
+                      placeholder="data.folio o id o folio"
+                      value={apiResponseFolioPath}
+                      onChange={(e) => setApiResponseFolioPath(e.target.value)}
+                      style={{ width: '100%' }}
+                      disabled={!apiEnabled}
+                    />
+                    <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                      Ruta en el JSON de respuesta donde se encuentra el folio (ej: "data.folio", "id", "folioNumber")
+                    </div>
+                  </div>
+                  
+                  <div style={{ padding: '12px', background: 'white', borderRadius: '6px', border: '1px solid #d1d5db' }}>
+                    <div style={{ fontSize: '13px', color: '#374151', marginBottom: '8px' }}>
+                      <strong>📝 Ejemplo de respuesta esperada:</strong>
+                    </div>
+                    <code style={{ display: 'block', padding: '8px', background: '#f3f4f6', borderRadius: '4px', fontSize: '12px', fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
+{`{
+  "success": true,
+  "message": "Formulario guardado",
+  "data": {
+    "folio": "ORD-00145",
+    "timestamp": "2024-11-24T10:30:00Z"
+  }
+}`}
+                    </code>
+                    <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '6px' }}>
+                      Para este ejemplo, el path sería: <code style={{ background: '#f3f4f6', padding: '2px 6px', borderRadius: '3px' }}>data.folio</code>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Configuración común para ambos modos */}
+              {numerationSource === 'local' && (
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
+                    <div>
+                      <label>Prefijo:</label>
+                      <input 
+                        type="text"
+                        className="input"
+                        placeholder="FORM-"
+                        value={numerationPrefix}
+                        onChange={(e) => setNumerationPrefix(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label>Sufijo:</label>
+                      <input 
+                        type="text"
+                        className="input"
+                        placeholder="-2024"
+                        value={numerationSuffix}
+                        onChange={(e) => setNumerationSuffix(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {numerationSource === 'local' && (
+                <>
+                  <div style={{ marginBottom: '15px' }}>
+                    <label>Cantidad de ceros (padding):</label>
+                    <input 
+                      type="number"
+                      className="input"
+                      min="1"
+                      max="10"
+                      value={numerationPadding}
+                      onChange={(e) => setNumerationPadding(parseInt(e.target.value))}
+                    />
+                  </div>
+
+                  <div style={{ marginBottom: '15px' }}>
+                    <label>Iniciar desde:</label>
+                    <input 
+                      type="number"
+                      className="input"
+                      min="1"
+                      value={numerationStartFrom}
+                      onChange={(e) => setNumerationStartFrom(parseInt(e.target.value))}
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* Campo selector (común para ambos modos) */}
               <div style={{ marginBottom: '15px' }}>
-                <label>Campo donde mostrar el número:</label>
+                <label>Campo donde mostrar el folio: *</label>
                 <select 
                   className="input"
                   value={numerationFieldId}
@@ -819,18 +1295,47 @@ const FormApiConfig: React.FC = () => {
                     <option key={field.id} value={field.id}>{field.name}</option>
                   ))}
                 </select>
+                <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                  El folio se mostrará en este campo del formulario
+                </div>
               </div>
 
+              {/* Vista previa del folio */}
               <div style={{ padding: '15px', background: '#f0f9ff', borderRadius: '5px', marginTop: '15px', border: '2px solid #2196F3' }}>
                 <div style={{ marginBottom: '8px', color: '#0369a1', fontSize: '14px' }}>
-                  <strong>📋 Próximo folio a generar:</strong>
+                  <strong>📋 Próximo folio:</strong>
                 </div>
-                <div style={{ fontSize: '24px', color: '#2196F3', fontWeight: 'bold', letterSpacing: '1px' }}>
-                  {getPreviewNumber()}
-                </div>
-                <div style={{ marginTop: '8px', color: '#64748b', fontSize: '12px', fontStyle: 'italic' }}>
-                  * Este será el número del próximo formulario impreso
-                </div>
+                {numerationSource === 'local' ? (
+                  <>
+                    <div style={{ fontSize: '24px', color: '#2196F3', fontWeight: 'bold', letterSpacing: '1px' }}>
+                      {getPreviewNumber()}
+                    </div>
+                    <div style={{ marginTop: '8px', color: '#64748b', fontSize: '12px', fontStyle: 'italic' }}>
+                      * Este será el número del próximo formulario impreso
+                    </div>
+                  </>
+                ) : numerationSource === 'api' ? (
+                  <>
+                    <div style={{ fontSize: '18px', color: '#2196F3', fontWeight: 'bold' }}>
+                      🌐 Folio generado por API Externa
+                    </div>
+                    <div style={{ marginTop: '8px', color: '#64748b', fontSize: '12px', fontStyle: 'italic' }}>
+                      * El folio será obtenido desde: {folioApiEndpoint || '(configurar endpoint)'}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontSize: '18px', color: '#10b981', fontWeight: 'bold' }}>
+                      📡 Folio de Respuesta de API
+                    </div>
+                    <div style={{ marginTop: '8px', color: '#64748b', fontSize: '12px', fontStyle: 'italic' }}>
+                      * El folio será extraído de la respuesta del API de guardado
+                    </div>
+                    <div style={{ marginTop: '4px', color: '#64748b', fontSize: '12px' }}>
+                      Path: {apiResponseFolioPath || '(configurar path)'}
+                    </div>
+                  </>
+                )}
               </div>
             </>
           )}

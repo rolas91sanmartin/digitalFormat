@@ -33,18 +33,22 @@ export class SubmitFormData {
         return { success: false, error: 'Plantilla no encontrada' };
       }
 
-      // 2. Generar número de folio (si está habilitado)
+      // 2. Generar número de folio (si está habilitado y NO es api-response)
+      // ⭐ Si es api-response, el folio se extrae de la respuesta de la API después
       let formNumber = '';
-      if (template.numerationConfig?.enabled) {
+      if (template.numerationConfig?.enabled && template.numerationConfig.source !== 'api-response') {
         try {
           formNumber = await this.generateFormNumber(template);
           // Agregar el número al campo correspondiente
           if (template.numerationConfig.fieldId) {
             data.values[template.numerationConfig.fieldId] = formNumber;
           }
+          console.log('✅ [SubmitFormData] Folio generado:', formNumber);
         } catch (error: any) {
           return { success: false, error: `Error generando número: ${error.message}` };
         }
+      } else if (template.numerationConfig?.enabled && template.numerationConfig.source === 'api-response') {
+        console.log('📡 [SubmitFormData] Modo API Response: El folio se extraerá de la respuesta');
       }
 
       // 3. Validar campos requeridos
@@ -85,10 +89,48 @@ export class SubmitFormData {
           const apiResponse = await this.sendToApi(template.apiConfiguration, mappedData);
           console.log('✅ [SubmitFormData] Respuesta de API:', apiResponse);
 
+          // ⭐ NUEVO: Extraer folio de la respuesta si es modo api-response
+          console.log('🔍 [SubmitFormData] Verificando extracción de folio...');
+          console.log('🔍 [SubmitFormData] Numeración habilitada?:', template.numerationConfig?.enabled);
+          console.log('🔍 [SubmitFormData] Source:', template.numerationConfig?.source);
+          console.log('🔍 [SubmitFormData] apiResponse existe?:', !!apiResponse);
+          
+          if (template.numerationConfig?.enabled && 
+              template.numerationConfig.source === 'api-response' &&
+              apiResponse) {
+            console.log('🌐 [SubmitFormData] EXTRAYENDO FOLIO DE RESPUESTA DE API...');
+            console.log('🌐 [SubmitFormData] Path configurado:', template.numerationConfig.apiResponseFolioPath);
+            console.log('🌐 [SubmitFormData] Respuesta completa:', JSON.stringify(apiResponse, null, 2));
+            
+            try {
+              const extractedFolio = this.extractFolioFromResponse(
+                apiResponse, 
+                template.numerationConfig.apiResponseFolioPath || ''
+              );
+              
+              console.log('🔍 [SubmitFormData] Resultado de extracción:', extractedFolio);
+              
+              if (extractedFolio) {
+                formNumber = extractedFolio;
+                console.log('✅✅✅ [SubmitFormData] FOLIO EXTRAÍDO EXITOSAMENTE:', formNumber);
+              } else {
+                console.error('❌ [SubmitFormData] extractFolioFromResponse retornó null/undefined');
+                console.error('❌ [SubmitFormData] Respuesta:', apiResponse);
+                console.error('❌ [SubmitFormData] Path:', template.numerationConfig.apiResponseFolioPath);
+              }
+            } catch (error: any) {
+              console.error('❌❌❌ [SubmitFormData] ERROR extrayendo folio de respuesta:', error);
+              console.error('❌ [SubmitFormData] Stack:', error.stack);
+            }
+          } else {
+            console.log('⏭️ [SubmitFormData] NO es modo api-response o no hay respuesta, usando formNumber actual:', formNumber);
+          }
+
           // Actualizar con respuesta exitosa
           await this.submittedFormRepository.update(submittedForm.id, {
             apiResponse,
-            apiStatus: 'success'
+            apiStatus: 'success',
+            formNumber // ⭐ Actualizar con el folio (sea generado o extraído)
           });
 
           return {
@@ -413,6 +455,30 @@ export class SubmitFormData {
       }
       throw error;
     }
+  }
+
+  // ⭐ NUEVO: Método para extraer el folio de la respuesta de la API
+  private extractFolioFromResponse(response: any, path: string): string | null {
+    if (!path || !response) {
+      console.warn('⚠️ [extractFolioFromResponse] Path o response vacío');
+      return null;
+    }
+
+    const pathParts = path.split('.');
+    let value: any = response;
+
+    for (const part of pathParts) {
+      if (value && typeof value === 'object' && part in value) {
+        value = value[part];
+      } else {
+        console.warn(`⚠️ [extractFolioFromResponse] No se encontró el path "${path}" en la respuesta`);
+        console.log('📋 [extractFolioFromResponse] Respuesta recibida:', JSON.stringify(response, null, 2));
+        return null;
+      }
+    }
+
+    console.log(`✅ [extractFolioFromResponse] Folio encontrado en path "${path}":`, value);
+    return String(value);
   }
 }
 
