@@ -58,16 +58,21 @@ export function setupAutoUpdater(window: BrowserWindow) {
   });
   
   autoUpdater.on('error', (err: any) => {
-    if (mainWindow) {
-      mainWindow.webContents.send('update:error', err.message);
-    }
+    // Solo loguear, NO enviar al renderer durante verificación automática
+    console.log('ℹ️ [Update] Info:', err.message);
+    // Solo notificar si fue un intento manual de descarga
+    // Para verificaciones automáticas, silenciosamente ignorar
   });
   
   // Verificar actualizaciones al iniciar (después de 3 segundos)
+  // Solo en builds empaquetados (producción)
   setTimeout(() => {
-    autoUpdater.checkForUpdates().catch((err: any) => {
-      console.error('Error al verificar actualizaciones:', err);
-    });
+    if (app.isPackaged) {
+      autoUpdater.checkForUpdates().catch((err: any) => {
+        // Silenciosamente ignorar errores de verificación automática
+        console.log('ℹ️ [Update] Verificación automática - no disponible:', err.message);
+      });
+    }
   }, 3000);
 }
 

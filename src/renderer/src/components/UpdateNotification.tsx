@@ -102,17 +102,29 @@ export const UpdateNotification: React.FC = () => {
 
     // Listener para errores
     const unsubscribeError = window.electronAPI.onUpdateError((error: string) => {
-      console.error('❌ [Update] Error:', error);
+      console.log('ℹ️ [Update] No se pudo verificar actualizaciones:', error);
       setDownloading(false);
       setProgress(0);
       
-      Swal.fire({
-        title: 'Error en la actualización',
-        text: 'No se pudo descargar la actualización. Por favor, intenta más tarde.',
-        icon: 'error',
-        confirmButtonColor: '#ef4444',
-        confirmButtonText: 'Entendido'
-      });
+      // Toast discreto que se cierra automáticamente (solo si hubo intento de descarga)
+      // No mostrar nada si solo falló la verificación automática
+      if (downloading) {
+        Swal.fire({
+          toast: true,
+          position: 'top-end',
+          icon: 'info',
+          title: 'No se pudo descargar la actualización',
+          text: 'Verifica tu conexión a internet',
+          showConfirmButton: false,
+          timer: 4000,
+          timerProgressBar: true,
+          background: '#fef3c7',
+          iconColor: '#f59e0b',
+          customClass: {
+            popup: 'colored-toast'
+          }
+        });
+      }
     });
 
     // Cleanup: remover listeners al desmontar
