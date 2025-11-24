@@ -1,6 +1,6 @@
 {
   "name": "format-printer-ia",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Aplicación para reconocer y recrear formularios de documentos con IA",
   "main": "dist/main/main/main/main.js",
   "scripts": {
