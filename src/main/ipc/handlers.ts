@@ -27,39 +27,61 @@ let mainWindow: BrowserWindow | null = null;
 export function setupAutoUpdater(window: BrowserWindow) {
   mainWindow = window;
   const { autoUpdater } = require('electron-updater');
+  const log = require('electron-log');
+  
+  // Configurar logging detallado
+  autoUpdater.logger = log;
+  autoUpdater.logger.transports.file.level = 'info';
   
   // Configurar auto-updater
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
   
+  console.log('🔧 [Update] Configuración de auto-updater:');
+  console.log('   - App empaquetado:', app.isPackaged);
+  console.log('   - Versión actual:', app.getVersion());
+  console.log('   - Feed URL:', autoUpdater.getFeedURL());
+  
   // Eventos de actualización
+  autoUpdater.on('checking-for-update', () => {
+    console.log('🔍 [Update] Verificando actualizaciones...');
+  });
+  
   autoUpdater.on('update-available', (info: any) => {
+    console.log('✅ [Update] Actualización disponible:', info.version);
+    console.log('   - Release notes:', info.releaseNotes);
+    console.log('   - Release date:', info.releaseDate);
     if (mainWindow) {
       mainWindow.webContents.send('update:available', info);
     }
   });
   
-  autoUpdater.on('update-not-available', () => {
+  autoUpdater.on('update-not-available', (info: any) => {
+    console.log('ℹ️ [Update] No hay actualizaciones disponibles');
+    console.log('   - Versión actual:', info.version);
     if (mainWindow) {
       mainWindow.webContents.send('update:not-available');
     }
   });
   
   autoUpdater.on('download-progress', (progressObj: any) => {
+    console.log('📥 [Update] Progreso de descarga:', Math.round(progressObj.percent) + '%');
     if (mainWindow) {
       mainWindow.webContents.send('update:download-progress', progressObj);
     }
   });
   
   autoUpdater.on('update-downloaded', (info: any) => {
+    console.log('✅ [Update] Actualización descargada:', info.version);
     if (mainWindow) {
       mainWindow.webContents.send('update:downloaded', info);
     }
   });
   
   autoUpdater.on('error', (err: any) => {
-    // Solo loguear, NO enviar al renderer durante verificación automática
-    console.log('ℹ️ [Update] Info:', err.message);
+    console.error('❌ [Update] Error:', err);
+    console.error('   - Mensaje:', err.message);
+    console.error('   - Stack:', err.stack);
     // Solo notificar si fue un intento manual de descarga
     // Para verificaciones automáticas, silenciosamente ignorar
   });
@@ -67,11 +89,22 @@ export function setupAutoUpdater(window: BrowserWindow) {
   // Verificar actualizaciones al iniciar (después de 3 segundos)
   // Solo en builds empaquetados (producción)
   setTimeout(() => {
+    console.log('⏰ [Update] Iniciando verificación automática...');
+    console.log('   - App empaquetado:', app.isPackaged);
+    
     if (app.isPackaged) {
-      autoUpdater.checkForUpdates().catch((err: any) => {
-        // Silenciosamente ignorar errores de verificación automática
-        console.log('ℹ️ [Update] Verificación automática - no disponible:', err.message);
-      });
+      console.log('📦 [Update] App empaquetado detectado - verificando actualizaciones');
+      autoUpdater.checkForUpdates()
+        .then((result: any) => {
+          console.log('✅ [Update] Verificación completada:', result);
+        })
+        .catch((err: any) => {
+          console.error('❌ [Update] Error en verificación:', err.message);
+          console.error('   - Código:', err.code);
+          console.error('   - URL intentada:', autoUpdater.getFeedURL());
+        });
+    } else {
+      console.log('🛠️ [Update] Modo desarrollo - actualizaciones deshabilitadas');
     }
   }, 3000);
 }
@@ -511,25 +544,47 @@ export function setupIpcHandlers() {
   // Update handlers
   ipcMain.handle('update:check', async () => {
     try {
+      console.log('🔍 [Update] Verificación manual solicitada');
       const { autoUpdater } = require('electron-updater');
+      
+      console.log('📋 [Update] Información del sistema:');
+      console.log('   - Versión actual:', app.getVersion());
+      console.log('   - Plataforma:', process.platform);
+      console.log('   - Arquitectura:', process.arch);
+      console.log('   - App empaquetado:', app.isPackaged);
+      console.log('   - Feed URL:', autoUpdater.getFeedURL());
+      
       const result = await autoUpdater.checkForUpdates();
+      
+      console.log('✅ [Update] Resultado de verificación:', result);
+      console.log('   - Update info:', result?.updateInfo);
+      console.log('   - Versión disponible:', result?.updateInfo?.version);
+      
       return { success: true, updateInfo: result?.updateInfo };
     } catch (error: any) {
+      console.error('❌ [Update] Error en verificación manual:', error);
+      console.error('   - Mensaje:', error.message);
+      console.error('   - Código:', error.code);
+      console.error('   - Stack:', error.stack);
       return { success: false, error: error.message };
     }
   });
 
   ipcMain.handle('update:download', async () => {
     try {
+      console.log('📥 [Update] Iniciando descarga de actualización');
       const { autoUpdater } = require('electron-updater');
       await autoUpdater.downloadUpdate();
+      console.log('✅ [Update] Descarga iniciada correctamente');
       return { success: true };
     } catch (error: any) {
+      console.error('❌ [Update] Error descargando actualización:', error.message);
       return { success: false, error: error.message };
     }
   });
 
   ipcMain.handle('update:install', () => {
+    console.log('🔄 [Update] Instalando actualización y reiniciando...');
     const { autoUpdater } = require('electron-updater');
     autoUpdater.quitAndInstall();
   });

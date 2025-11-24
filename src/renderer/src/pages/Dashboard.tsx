@@ -302,6 +302,40 @@ const Dashboard: React.FC = () => {
         <div className="header-content">
           <h1>Mis Formularios</h1>
           <div className="header-actions">
+            <button 
+              className="btn" 
+              onClick={async () => {
+                console.log('🔍 [DEBUG] Verificando actualizaciones manualmente...');
+                const result = await window.electronAPI.checkForUpdates();
+                console.log('📋 [DEBUG] Resultado:', result);
+                if (result.success) {
+                  if (result.updateInfo) {
+                    setNotification({ 
+                      message: `✅ Actualización ${result.updateInfo.version} disponible`, 
+                      type: 'success' 
+                    });
+                  } else {
+                    setNotification({ 
+                      message: 'ℹ️ Ya tienes la última versión', 
+                      type: 'info' 
+                    });
+                  }
+                } else {
+                  setNotification({ 
+                    message: `❌ Error: ${result.error}`, 
+                    type: 'error' 
+                  });
+                }
+              }}
+              style={{ 
+                background: '#6366f1', 
+                fontSize: '0.85rem',
+                padding: '0.5rem 1rem'
+              }}
+              title="Verificar actualizaciones (Debug)"
+            >
+              🔍 Debug Updates
+            </button>
             <button className="btn btn-secondary" onClick={handleSettings}>
               ⚙️ Configuración
             </button>
