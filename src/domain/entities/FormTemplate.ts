@@ -107,6 +107,9 @@ export interface FormTemplate {
   fieldMappings?: FieldMapping[];
   tableMappings?: TableMapping[];
   
+  // Controles avanzados personalizados (botones, selects, campos calculados, etc.)
+  customControls?: any[];
+  
   createdAt: Date;
   updatedAt: Date;
 }

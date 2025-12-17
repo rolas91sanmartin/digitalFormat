@@ -96,23 +96,47 @@ export class OpenAIDocumentRecognitionService implements IDocumentRecognitionSer
     fields: any[];
     tables: any[];
   }> {
-    const prompt = `Analiza este formulario y extrae los elementos para recrearlo.
+    const prompt = `Analiza este formulario y extrae TODOS los elementos para recrearlo con precisión.
 
 **Dimensiones de la imagen: ${pageSize.width}x${pageSize.height} píxeles**
 
-**Instrucciones:**
+**Sistema de coordenadas:**
 - La esquina superior izquierda es (0,0)
-- Mide las coordenadas en píxeles desde esa esquina
 - X va de izquierda a derecha (0 a ${pageSize.width})
 - Y va de arriba a abajo (0 a ${pageSize.height})
+- Mide las coordenadas en píxeles con precisión
 
-**Identifica:**
+**IMPORTANTE - Identifica TODOS estos elementos:**
 
-1. **Elementos estáticos**: Textos impresos, títulos, etiquetas (NO espacios en blanco)
-2. **Campos editables**: Líneas o espacios donde se puede escribir
-3. **Tablas**: Estructuras con columnas y filas
+1. **Elementos estáticos**: 
+   - Títulos del formulario
+   - Etiquetas de campos (ej: "Proveedor:", "Dirección:", "Fecha:")
+   - Textos descriptivos pequeños (ej: "En letras:", "Para Utilizar en:", "Solicitado por:", "Autorizado por:")
+   - Logotipos y encabezados
+   - Información de la empresa (nombre, RUC, teléfono)
+   - NO incluir espacios en blanco vacíos
 
-Devuelve JSON con este formato:
+2. **Campos editables**: 
+   - Líneas horizontales donde se puede escribir
+   - Espacios vacíos con bordes o subrayados
+   - Cuadros de texto vacíos
+   - Checkboxes
+   - IMPORTANTE: Busca campos después de etiquetas como "En letras:", "Para Utilizar en:", "Solicitado por:", "Autorizado por:"
+   - Cada línea o espacio editable debe ser un campo separado
+
+3. **Tablas**: 
+   - Estructuras con columnas y filas
+   - Grillas con encabezados
+   - Detecta TODAS las columnas visibles
+
+**Instrucciones adicionales:**
+- Sé exhaustivo: detecta TODOS los campos editables, incluso los pequeños
+- Los campos de texto deben tener suficiente ancho (mínimo 150px) para escribir cómodamente
+- Las etiquetas pequeñas como "En letras:", "Para Utilizar en:" deben ser elementos estáticos
+- Los espacios después de esas etiquetas deben ser campos editables
+- Presta atención a campos en la parte inferior del formulario (firmas, autorizaciones)
+
+Devuelve JSON con este formato exacto:
 {
   "staticElements": [{"type": "text", "content": "texto", "position": {"x": 50, "y": 30, "width": 200, "height": 25}, "style": {"fontSize": 14, "fontWeight": "bold", "color": "#000000"}}],
   "fields": [{"name": "proveedor", "type": "text", "position": {"x": 100, "y": 200, "width": 300, "height": 30}, "style": {"fontSize": 12}, "placeholder": "Nombre", "required": true}],

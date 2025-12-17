@@ -64,11 +64,19 @@ export class DatabaseConnection {
         numerationConfig TEXT,
         fieldMappings TEXT,
         tableMappings TEXT,
+        customControls TEXT,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL,
         FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
       )
     `);
+    
+    // Migración: agregar columna customControls si no existe
+    try {
+      db.exec(`ALTER TABLE form_templates ADD COLUMN customControls TEXT`);
+    } catch (e) {
+      // La columna ya existe, ignorar error
+    }
 
     // Tabla de secuencias de numeración
     db.exec(`

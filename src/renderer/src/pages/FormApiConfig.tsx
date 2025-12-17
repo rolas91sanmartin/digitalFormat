@@ -148,16 +148,69 @@ const FormApiConfig: React.FC = () => {
         }
 
         if (tmpl.fieldMappings) {
-          setFieldMappings(tmpl.fieldMappings);
+          // Si hay mappings guardados, verificar si incluyen los controles avanzados
+          let mappings = [...tmpl.fieldMappings].map((m: any) => ({
+            ...m,
+            // Si no tiene includeInApi, asumimos que está incluido (migración de datos antiguos)
+            includeInApi: m.includeInApi !== undefined ? m.includeInApi : true
+          }));
+          
+          // LIMPIAR MAPPINGS OBSOLETOS al cargar
+          const existingFieldIds = new Set<string>();
+          tmpl.fields?.forEach((f: any) => existingFieldIds.add(f.id));
+          tmpl.customControls?.forEach((c: any) => existingFieldIds.add(c.id));
+          mappings = mappings.filter((m: any) => existingFieldIds.has(m.fieldId));
+          
+          // Agregar mappings para controles avanzados que no estén incluidos
+          if (tmpl.customControls && tmpl.customControls.length > 0) {
+            tmpl.customControls
+              .filter((ctrl: any) => ctrl.type !== 'button' && ctrl.type !== 'label')
+              .forEach((ctrl: any) => {
+                if (!mappings.some(m => m.fieldId === ctrl.id)) {
+                  mappings.push({
+                    fieldId: ctrl.id,
+                    apiKey: ctrl.name.toLowerCase().replace(/\s+/g, '_'),
+                    transform: { type: 'none' },
+                    includeInApi: true, // Incluido por defecto
+                    required: false,
+                    defaultValue: '',
+                    isControl: true,
+                    controlType: ctrl.type
+                  });
+                }
+              });
+          }
+          
+          setFieldMappings(mappings);
         } else {
-          // Inicializar mapeos con campos del template
+          // Inicializar mapeos con campos del template (incluidos por defecto)
           const initialMappings = tmpl.fields?.map((field: any) => ({
             fieldId: field.id,
             apiKey: field.name.toLowerCase().replace(/\s+/g, '_'),
             transform: { type: 'none' },
-            required: field.required || false,
+            includeInApi: true, // Incluido por defecto
+            required: false, // Requerido: no por defecto
             defaultValue: ''
           })) || [];
+          
+          // Agregar mapeos para controles avanzados (incluidos por defecto)
+          if (tmpl.customControls && tmpl.customControls.length > 0) {
+            tmpl.customControls
+              .filter((ctrl: any) => ctrl.type !== 'button' && ctrl.type !== 'label')
+              .forEach((ctrl: any) => {
+                initialMappings.push({
+                  fieldId: ctrl.id,
+                  apiKey: ctrl.name.toLowerCase().replace(/\s+/g, '_'),
+                  transform: { type: 'none' },
+                  includeInApi: true, // Incluido por defecto
+                  required: false, // Requerido: no por defecto
+                  defaultValue: '',
+                  isControl: true,
+                  controlType: ctrl.type
+                });
+              });
+          }
+          
           setFieldMappings(initialMappings);
         }
         
@@ -306,14 +359,19 @@ const FormApiConfig: React.FC = () => {
         }
       }
 
-      console.log('💾 Guardando tableMappings:', tableMappings);
-      console.log('💾 Guardando custom headers:', headersObject);
-      console.log('💾 API habilitada:', apiEnabled);
+      // LIMPIAR MAPPINGS OBSOLETOS: Eliminar mappings de campos que ya no existen
+      let cleanedFieldMappings = fieldMappings;
+      if (apiEnabled && fieldMappings && fieldMappings.length > 0) {
+        const existingFieldIds = new Set<string>();
+        template.fields?.forEach((f: any) => existingFieldIds.add(f.id));
+        template.customControls?.forEach((c: any) => existingFieldIds.add(c.id));
+        cleanedFieldMappings = fieldMappings.filter((m: any) => existingFieldIds.has(m.fieldId));
+      }
       
       const response = await window.electronAPI.updateFormTemplate(template.id, user.id, {
         apiConfiguration,
         numerationConfig,
-        fieldMappings: apiEnabled ? fieldMappings : undefined,
+        fieldMappings: apiEnabled ? cleanedFieldMappings : undefined,
         tableMappings: apiEnabled ? tableMappings : undefined
       });
       
@@ -389,10 +447,39 @@ const FormApiConfig: React.FC = () => {
 
     // Datos de ejemplo para la vista previa
     const exampleFieldValues: any = {};
+    const exampleControlValues: any = {};
+    
     fieldMappings.forEach(mapping => {
+      // Solo incluir si está marcado para incluir (includeInApi)
+      if (mapping.includeInApi === false) return;
+      
+      // Solo incluir si tiene apiKey configurado
+      if (!mapping.apiKey) return;
+      
+      // Verificar si es un campo normal
       const field = template.fields?.find((f: any) => f.id === mapping.fieldId);
       if (field) {
         exampleFieldValues[mapping.apiKey] = `ejemplo_${field.name.toLowerCase()}`;
+        return;
+      }
+      
+      // Verificar si es un control avanzado
+      const control = template.customControls?.find((c: any) => c.id === mapping.fieldId);
+      if (control && mapping.apiKey) {
+        // Generar valor de ejemplo según el tipo de control
+        const exampleValues: Record<string, string> = {
+          'select': 'opcion_seleccionada',
+          'radio': 'opcion_elegida',
+          'date-picker': '2024-12-04',
+          'time-picker': '14:30',
+          'color-picker': '#3b82f6',
+          'range-slider': '75',
+          'toggle': 'true',
+          'calculated': '1250.00',
+          'file': 'documento.pdf',
+          'signature': 'data:image/png;base64,...'
+        };
+        exampleControlValues[mapping.apiKey] = exampleValues[control.type] || `ejemplo_${control.name.toLowerCase()}`;
       }
     });
 
@@ -416,6 +503,9 @@ const FormApiConfig: React.FC = () => {
       }
     });
 
+    // Combinar todos los campos (normales + controles) en una sola sección
+    const allFields = { ...exampleFieldValues, ...exampleControlValues };
+    
     // Construir JSON según el formato seleccionado
     if (dataFormat === 'structured') {
       return {
@@ -426,7 +516,7 @@ const FormApiConfig: React.FC = () => {
           submittedAt: new Date().toISOString(),
           submittedBy: user?.email || 'user@example.com'
         },
-        fields: exampleFieldValues,
+        fields: allFields,
         tables: exampleTableData
       };
     } else if (dataFormat === 'flat') {
@@ -434,7 +524,7 @@ const FormApiConfig: React.FC = () => {
         folio: getPreviewNumber(),
         enviado_por: user?.email || 'user@example.com',
         fecha_envio: new Date().toISOString(),
-        ...exampleFieldValues,
+        ...allFields,
         ...Object.entries(exampleTableData).reduce((acc, [key, value]) => {
           acc[`${key}_items`] = value;
           return acc;
@@ -450,7 +540,7 @@ const FormApiConfig: React.FC = () => {
           submittedBy: user?.email || 'user@example.com',
           submittedAt: new Date().toISOString()
         },
-        fields: exampleFieldValues,
+        fields: allFields,
         tables: exampleTableData
       };
     }
@@ -733,7 +823,14 @@ const FormApiConfig: React.FC = () => {
                   <tr style={{ borderBottom: '2px solid #ddd' }}>
                     <th style={{ padding: '8px', textAlign: 'left' }}>Campo</th>
                     <th style={{ padding: '8px', textAlign: 'left' }}>Nombre en API</th>
-                    <th style={{ padding: '8px', textAlign: 'center' }}>Requerido</th>
+                    <th style={{ padding: '8px', textAlign: 'center', width: '80px' }}>
+                      <div style={{ fontSize: '0.85rem' }}>Incluir</div>
+                      <div style={{ fontSize: '0.7rem', color: '#6b7280', fontWeight: 'normal' }}>en JSON</div>
+                    </th>
+                    <th style={{ padding: '8px', textAlign: 'center', width: '80px' }}>
+                      <div style={{ fontSize: '0.85rem' }}>Requerido</div>
+                      <div style={{ fontSize: '0.7rem', color: '#6b7280', fontWeight: 'normal' }}>validar</div>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -741,7 +838,10 @@ const FormApiConfig: React.FC = () => {
                     const mapping = fieldMappings.find(m => m.fieldId === field.id) || {};
                     return (
                       <tr key={field.id} style={{ borderBottom: '1px solid #eee' }}>
-                        <td style={{ padding: '8px' }}>{field.name}</td>
+                        <td style={{ padding: '8px' }}>
+                          <span style={{ marginRight: '6px' }}>📄</span>
+                          {field.name}
+                        </td>
                         <td style={{ padding: '8px' }}>
                           <input 
                             type="text"
@@ -755,8 +855,17 @@ const FormApiConfig: React.FC = () => {
                         <td style={{ padding: '8px', textAlign: 'center' }}>
                           <input 
                             type="checkbox"
+                            checked={mapping.includeInApi !== false}
+                            onChange={(e) => updateFieldMapping(field.id, 'includeInApi', e.target.checked)}
+                            style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                          />
+                        </td>
+                        <td style={{ padding: '8px', textAlign: 'center' }}>
+                          <input 
+                            type="checkbox"
                             checked={mapping.required || false}
                             onChange={(e) => updateFieldMapping(field.id, 'required', e.target.checked)}
+                            style={{ width: '18px', height: '18px', cursor: 'pointer' }}
                           />
                         </td>
                       </tr>
@@ -764,6 +873,113 @@ const FormApiConfig: React.FC = () => {
                   })}
                 </tbody>
               </table>
+
+              {/* Mapeo de Controles Avanzados */}
+              {template.customControls && template.customControls.length > 0 && (
+                <>
+                  <h3 style={{ marginTop: '25px', marginBottom: '10px' }}>
+                    ⚡ Mapeo de Controles Avanzados
+                  </h3>
+                  <p style={{ fontSize: '13px', color: '#6b7280', marginBottom: '10px' }}>
+                    Incluye campos calculados, selectores, fechas y otros controles de entrada de datos.
+                  </p>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '2px solid #ddd' }}>
+                        <th style={{ padding: '8px', textAlign: 'left' }}>Control</th>
+                        <th style={{ padding: '8px', textAlign: 'left' }}>Tipo</th>
+                        <th style={{ padding: '8px', textAlign: 'left' }}>Nombre en API</th>
+                        <th style={{ padding: '8px', textAlign: 'center', width: '80px' }}>
+                          <div style={{ fontSize: '0.85rem' }}>Incluir</div>
+                          <div style={{ fontSize: '0.7rem', color: '#6b7280', fontWeight: 'normal' }}>en JSON</div>
+                        </th>
+                        <th style={{ padding: '8px', textAlign: 'center', width: '80px' }}>
+                          <div style={{ fontSize: '0.85rem' }}>Requerido</div>
+                          <div style={{ fontSize: '0.7rem', color: '#6b7280', fontWeight: 'normal' }}>validar</div>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {template.customControls
+                        .filter((ctrl: any) => ctrl.type !== 'button' && ctrl.type !== 'label')
+                        .map((ctrl: any) => {
+                          const mapping = fieldMappings.find(m => m.fieldId === ctrl.id) || {};
+                          const typeIcons: Record<string, string> = {
+                            'select': '📋',
+                            'radio': '🔘',
+                            'date-picker': '📅',
+                            'time-picker': '⏰',
+                            'color-picker': '🎨',
+                            'range-slider': '📊',
+                            'toggle': '🔀',
+                            'calculated': '🧮',
+                            'file': '📎',
+                            'signature': '✍️',
+                            'checkbox': '☑️'
+                          };
+                          const typeLabels: Record<string, string> = {
+                            'select': 'Selector',
+                            'radio': 'Opciones',
+                            'date-picker': 'Fecha',
+                            'time-picker': 'Hora',
+                            'color-picker': 'Color',
+                            'range-slider': 'Slider',
+                            'toggle': 'Toggle',
+                            'calculated': 'Calculado',
+                            'file': 'Archivo',
+                            'signature': 'Firma',
+                            'checkbox': 'Checkbox'
+                          };
+                          return (
+                            <tr key={ctrl.id} style={{ borderBottom: '1px solid #eee' }}>
+                              <td style={{ padding: '8px' }}>
+                                <span style={{ marginRight: '6px' }}>{typeIcons[ctrl.type] || '⚡'}</span>
+                                {ctrl.name}
+                              </td>
+                              <td style={{ padding: '8px' }}>
+                                <span style={{ 
+                                  padding: '2px 8px', 
+                                  background: ctrl.type === 'calculated' ? '#fef3c7' : '#e0f2fe',
+                                  borderRadius: '4px',
+                                  fontSize: '12px',
+                                  color: ctrl.type === 'calculated' ? '#92400e' : '#0369a1'
+                                }}>
+                                  {typeLabels[ctrl.type] || ctrl.type}
+                                </span>
+                              </td>
+                              <td style={{ padding: '8px' }}>
+                                <input 
+                                  type="text"
+                                  className="input"
+                                  placeholder={ctrl.name.toLowerCase().replace(/\s+/g, '_')}
+                                  value={mapping.apiKey || ''}
+                                  onChange={(e) => updateFieldMapping(ctrl.id, 'apiKey', e.target.value)}
+                                  style={{ width: '100%' }}
+                                />
+                              </td>
+                              <td style={{ padding: '8px', textAlign: 'center' }}>
+                                <input 
+                                  type="checkbox"
+                                  checked={mapping.includeInApi !== false}
+                                  onChange={(e) => updateFieldMapping(ctrl.id, 'includeInApi', e.target.checked)}
+                                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                                />
+                              </td>
+                              <td style={{ padding: '8px', textAlign: 'center' }}>
+                                <input 
+                                  type="checkbox"
+                                  checked={mapping.required || false}
+                                  onChange={(e) => updateFieldMapping(ctrl.id, 'required', e.target.checked)}
+                                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                                />
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </>
+              )}
 
               {/* Mapeo de Tablas */}
               {template.tables && template.tables.length > 0 && (

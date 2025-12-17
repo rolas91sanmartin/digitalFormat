@@ -252,7 +252,8 @@ export function setupIpcHandlers() {
         apiConfiguration: data.templateData.apiConfiguration || undefined,
         numerationConfig: data.templateData.numerationConfig || undefined,
         fieldMappings: data.templateData.fieldMappings || [],
-        tableMappings: data.templateData.tableMappings || []
+        tableMappings: data.templateData.tableMappings || [],
+        customControls: data.templateData.customControls || [] // Controles avanzados
       };
 
       const template = await formTemplateRepository.create(templateData);

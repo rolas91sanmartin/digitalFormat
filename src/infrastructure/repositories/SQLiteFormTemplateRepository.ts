@@ -15,9 +15,9 @@ export class SQLiteFormTemplateRepository implements IFormTemplateRepository {
         id, name, description, userId, backgroundImage, 
         staticElements, fields, tables, renderMode,
         pageWidth, pageHeight, apiConfiguration, numerationConfig, fieldMappings, tableMappings,
-        createdAt, updatedAt
+        customControls, createdAt, updatedAt
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -36,6 +36,7 @@ export class SQLiteFormTemplateRepository implements IFormTemplateRepository {
       templateData.numerationConfig ? JSON.stringify(templateData.numerationConfig) : null,
       templateData.fieldMappings ? JSON.stringify(templateData.fieldMappings) : null,
       templateData.tableMappings ? JSON.stringify(templateData.tableMappings) : null,
+      (templateData as any).customControls ? JSON.stringify((templateData as any).customControls) : null,
       now,
       now
     );
@@ -78,6 +79,7 @@ export class SQLiteFormTemplateRepository implements IFormTemplateRepository {
       numerationConfig: row.numerationConfig ? JSON.parse(row.numerationConfig) : undefined,
       fieldMappings: row.fieldMappings ? JSON.parse(row.fieldMappings) : undefined,
       tableMappings: parsedTableMappings,
+      customControls: row.customControls ? JSON.parse(row.customControls) : [],
       createdAt: new Date(row.createdAt),
       updatedAt: new Date(row.updatedAt)
     };
@@ -105,6 +107,7 @@ export class SQLiteFormTemplateRepository implements IFormTemplateRepository {
       numerationConfig: row.numerationConfig ? JSON.parse(row.numerationConfig) : undefined,
       fieldMappings: row.fieldMappings ? JSON.parse(row.fieldMappings) : undefined,
       tableMappings: row.tableMappings ? JSON.parse(row.tableMappings) : undefined,
+      customControls: row.customControls ? JSON.parse(row.customControls) : [],
       createdAt: new Date(row.createdAt),
       updatedAt: new Date(row.updatedAt)
     }));
@@ -163,6 +166,10 @@ export class SQLiteFormTemplateRepository implements IFormTemplateRepository {
       const serialized = templateData.tableMappings ? JSON.stringify(templateData.tableMappings) : null;
       console.log('💾 [SQLite] Serializado como:', serialized);
       values.push(serialized);
+    }
+    if ((templateData as any).customControls !== undefined) {
+      updates.push('customControls = ?');
+      values.push((templateData as any).customControls ? JSON.stringify((templateData as any).customControls) : null);
     }
 
     updates.push('updatedAt = ?');

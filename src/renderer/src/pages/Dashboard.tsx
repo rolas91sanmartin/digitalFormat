@@ -189,7 +189,8 @@ const Dashboard: React.FC = () => {
           apiConfiguration: template.apiConfiguration || null,
           numerationConfig: template.numerationConfig || null,
           fieldMappings: template.fieldMappings || [],
-          tableMappings: template.tableMappings || []
+          tableMappings: template.tableMappings || [],
+          customControls: (template as any).customControls || [] // Controles avanzados
         }
       };
 
@@ -334,7 +335,7 @@ const Dashboard: React.FC = () => {
               }}
               title="Verificar actualizaciones (Debug)"
             >
-              🔍 Debug Updates
+              🔍 Verificar actualizaciones
             </button>
             <button className="btn btn-secondary" onClick={handleSettings}>
               ⚙️ Configuración

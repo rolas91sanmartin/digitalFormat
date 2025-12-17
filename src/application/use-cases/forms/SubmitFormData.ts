@@ -80,13 +80,13 @@ export class SubmitFormData {
           console.log('📋 [SubmitFormData] Datos originales:', data.values);
           console.log('👤 [SubmitFormData] Usuario que envía (ID):', data.userId);
           console.log('📧 [SubmitFormData] Email del usuario:', data.userEmail);
-          const mappedData = this.mapFieldsToApi(template, data.values, data.userEmail);
+          const mappedData = this.mapFieldsToApi(template, data.values, data.userEmail, data.userId);
           console.log('📋 [SubmitFormData] Datos mapeados:', mappedData);
           console.log('🌐 [SubmitFormData] Endpoint:', template.apiConfiguration.endpoint);
 
           // Enviar a API
           console.log('🚀 [SubmitFormData] Enviando a API...');
-          const apiResponse = await this.sendToApi(template.apiConfiguration, mappedData);
+          const apiResponse = await this.sendToApi(template.apiConfiguration, mappedData, data.userId, data.userEmail);
           console.log('✅ [SubmitFormData] Respuesta de API:', apiResponse);
 
           // ⭐ NUEVO: Extraer folio de la respuesta si es modo api-response
@@ -260,7 +260,7 @@ export class SubmitFormData {
     return { valid: true };
   }
 
-  private mapFieldsToApi(template: FormTemplate, values: Record<string, any>, userEmail: string): any {
+  private mapFieldsToApi(template: FormTemplate, values: Record<string, any>, userEmail: string, userId: string): any {
     const dataFormat = template.apiConfiguration?.dataFormat || 'structured';
 
     // Mapear campos
@@ -391,11 +391,29 @@ export class SubmitFormData {
     }
   }
 
-  private async sendToApi(config: ApiConfiguration, data: any): Promise<any> {
+  private async sendToApi(config: ApiConfiguration, data: any, userId?: string, userEmail?: string): Promise<any> {
+    // Reemplazar placeholders del usuario en el endpoint
+    let endpoint = config.endpoint;
+    if (userId) {
+      endpoint = endpoint.replace(/\{Usuario ID\}/g, userId);
+      endpoint = endpoint.replace(/\{Usuario Email\}/g, userEmail || '');
+      endpoint = endpoint.replace(/\{Usuario Nombre\}/g, userEmail || ''); // Por ahora usar email como nombre
+    }
+    
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...config.headers
     };
+    
+    // Reemplazar placeholders del usuario en los headers
+    if (userId) {
+      Object.keys(headers).forEach(key => {
+        headers[key] = headers[key]
+          .replace(/\{Usuario ID\}/g, userId)
+          .replace(/\{Usuario Email\}/g, userEmail || '')
+          .replace(/\{Usuario Nombre\}/g, userEmail || '');
+      });
+    }
     
     console.log('📋 [sendToApi] Headers personalizados configurados:', config.headers);
     console.log('📋 [sendToApi] Headers iniciales:', headers);
@@ -429,11 +447,11 @@ export class SubmitFormData {
     const timeoutId = setTimeout(() => controller.abort(), config.timeout || 30000);
 
     try {
-      console.log('🌐 [sendToApi] Realizando fetch a:', config.endpoint);
+      console.log('🌐 [sendToApi] Realizando fetch a:', endpoint);
       console.log('🌐 [sendToApi] Método:', config.method);
       console.log('🌐 [sendToApi] Body:', JSON.stringify(data, null, 2));
       
-      const response = await fetch(config.endpoint, {
+      const response = await fetch(endpoint, {
         method: config.method,
         headers,
         body: JSON.stringify(data),
