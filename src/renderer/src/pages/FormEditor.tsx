@@ -2158,7 +2158,6 @@ const FormEditor: React.FC = () => {
     customControls.forEach((control) => {
       // Inicializar con valores vacíos según el tipo
       switch (control.type) {
-        case 'checkbox':
         case 'toggle':
         case 'checkbox':
           clearedControlValues[control.id] = false;
