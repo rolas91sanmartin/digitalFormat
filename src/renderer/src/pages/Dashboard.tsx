@@ -38,6 +38,31 @@ const Dashboard: React.FC = () => {
     loadTemplates();
   }, [user]);
 
+  // Abrir e importar archivo si la app se inició con doble clic en .fpconfig
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const result = await window.electronAPI.getPendingOpenFile();
+        if (cancelled || !result?.content) return;
+        const importData = JSON.parse(result.content);
+        if (!importData?.template?.name) return;
+        const importResult = await window.electronAPI.importFormTemplate(user.id, importData.template);
+        if (cancelled) return;
+        if (importResult.success) {
+          setNotification({ message: `Configuración importada: ${importData.template.name}`, type: 'success' });
+          await loadTemplates();
+        } else {
+          setNotification({ message: `Error al importar: ${importResult.error}`, type: 'error' });
+        }
+      } catch (_e) {
+        if (!cancelled) setNotification({ message: 'No se pudo importar el archivo abierto', type: 'error' });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user]);
+
   const loadTemplates = async () => {
     if (!user) return;
 
@@ -206,7 +231,7 @@ const Dashboard: React.FC = () => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      const fileName = `${(template.name || 'template').replace(/[^a-z0-9]/gi, '_')}_config.json`;
+      const fileName = `${(template.name || 'template').replace(/[^a-z0-9]/gi, '_')}_config.fpconfig`;
       a.download = fileName;
       document.body.appendChild(a);
       a.click();
@@ -226,7 +251,7 @@ const Dashboard: React.FC = () => {
       // Crear un input file temporal
       const input = document.createElement('input');
       input.type = 'file';
-      input.accept = '.json';
+      input.accept = '.fpconfig,.json';
       
       input.onchange = async (e: any) => {
         const file = e.target.files[0];

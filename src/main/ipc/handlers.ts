@@ -20,6 +20,7 @@ import { SQLiteSubmittedFormRepository } from '../../infrastructure/repositories
 import fs from 'fs';
 import path from 'path';
 import { app } from 'electron';
+import { getAndClear } from '../pendingOpenFile';
 
 let openaiApiKey: string = '';
 let mainWindow: BrowserWindow | null = null;
@@ -118,6 +119,11 @@ export function setupIpcHandlers() {
 
   // Cargar API Key si existe
   loadApiKey();
+
+  // Archivo abierto con doble clic (.fpconfig / importación)
+  ipcMain.handle('app:getPendingOpenFile', async () => {
+    return getAndClear();
+  });
 
   // Auth handlers
   ipcMain.handle('auth:register', async (_event, data) => {

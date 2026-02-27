@@ -71,6 +71,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   selectFile: () =>
     ipcRenderer.invoke('file:select'),
 
+  getPendingOpenFile: () =>
+    ipcRenderer.invoke('app:getPendingOpenFile'),
+
   // Settings
   getApiKey: () =>
     ipcRenderer.invoke('settings:getApiKey'),
@@ -137,6 +140,7 @@ export type ElectronAPI = {
   printForm: (htmlContent: string) => Promise<any>;
   printWithBackground: (options?: any) => Promise<any>;
   selectFile: () => Promise<{ filePath: string; buffer: ArrayBuffer; type: string } | null>;
+  getPendingOpenFile: () => Promise<{ path: string; content: string } | null>;
   getApiKey: () => Promise<string>;
   setApiKey: (apiKey: string) => Promise<void>;
   checkForUpdates: () => Promise<any>;

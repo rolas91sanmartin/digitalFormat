@@ -96,6 +96,13 @@
       "target": [
         "nsis",
         "portable"
+      ],
+      "fileAssociations": [
+        {
+          "ext": "fpconfig",
+          "name": "FormatPrinter Config",
+          "description": "Configuración de formulario FormatPrinter IA"
+        }
       ]
     },
     "nsis": {

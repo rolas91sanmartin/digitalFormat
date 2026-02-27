@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { DatabaseConnection } from '../infrastructure/database/DatabaseConnection';
 import { setupIpcHandlers, setupAutoUpdater } from './ipc/handlers';
+import { setPending, getPathFromArgv } from './pendingOpenFile';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -149,8 +150,33 @@ async function createWindow() {
   });
 }
 
+// Bloquear segunda instancia y recibir archivo cuando la app ya está abierta
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on('second-instance', (_event, commandLine) => {
+    const openPath = getPathFromArgv(commandLine);
+    if (openPath) {
+      setPending(openPath);
+      log(`Archivo recibido (segunda instancia): ${openPath}`);
+    }
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+}
+
 app.whenReady().then(async () => {
   log('✓ App ready');
+
+  // Archivo abierto con doble clic (antes de crear ventana)
+  const openPath = getPathFromArgv(process.argv);
+  if (openPath) {
+    log(`Archivo para abrir: ${openPath}`);
+    setPending(openPath);
+  }
 
   try {
     // Inicializar base de datos
@@ -202,6 +228,11 @@ app.on('window-all-closed', () => {
     DatabaseConnection.close();
     app.quit();
   }
+});
+
+app.on('open-file', (event, pathToFile) => {
+  event.preventDefault();
+  if (pathToFile) setPending(pathToFile);
 });
 
 app.on('before-quit', () => {
