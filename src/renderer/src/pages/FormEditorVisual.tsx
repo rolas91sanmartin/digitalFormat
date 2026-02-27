@@ -19,15 +19,22 @@ const FormEditorVisual: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showBackground, setShowBackground] = useState(true);
+  const [printBackground, setPrintBackground] = useState(true); // Desactivar para impresoras matriciales
   const [selectedElement, setSelectedElement] = useState<{ type: 'static' | 'field' | 'table'; id: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [showPropertiesPanel, setShowPropertiesPanel] = useState(false);
   const [isDragMode, setIsDragMode] = useState(true); // Modo drag activado por defecto
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
+  const [fieldValues, setFieldValues] = useState<Record<string, any>>({});
 
   useEffect(() => {
     loadTemplate();
   }, [id]);
+
+  // Sincronizar "Imprimir fondo" con la plantilla (cargada o importada)
+  useEffect(() => {
+    if (template) setPrintBackground(template.printBackground !== false);
+  }, [template?.id]);
 
   const loadTemplate = async () => {
     try {
@@ -126,7 +133,8 @@ const FormEditorVisual: React.FC = () => {
           staticElements: template.staticElements,
           fields: template.fields,
           tables: template.tables,
-          pageSize: template.pageSize
+          pageSize: template.pageSize,
+          printBackground
         }
       );
 
@@ -144,13 +152,13 @@ const FormEditorVisual: React.FC = () => {
   };
 
   const handlePrint = async () => {
-    // Inyectar una imagen de fondo temporal dentro del canvas para asegurar impresión
+    // Inyectar imagen de fondo solo si está activada la impresión de fondo
     const prev = showBackground;
-    if (!prev) setShowBackground(true);
+    if (printBackground && !prev) setShowBackground(true);
     await new Promise(requestAnimationFrame);
     const canvas = document.querySelector('.form-canvas') as HTMLElement | null;
     let injectedImg: HTMLImageElement | null = null;
-    if (canvas && template?.backgroundImage) {
+    if (printBackground && canvas && template?.backgroundImage) {
       injectedImg = document.createElement('img');
       injectedImg.src = template.backgroundImage;
       injectedImg.alt = 'bg-print';
@@ -161,13 +169,12 @@ const FormEditorVisual: React.FC = () => {
       injectedImg.style.objectFit = 'contain';
       injectedImg.style.pointerEvents = 'none';
       injectedImg.style.zIndex = '0';
-      // Asegurar que el contenedor apile por encima
       (canvas.style as any).position = canvas.style.position || 'relative';
       canvas.prepend(injectedImg);
     }
     await new Promise(resolve => setTimeout(resolve, 100));
     try {
-      await window.electronAPI.printWithBackground({ silent: false, landscape: false });
+      await window.electronAPI.printWithBackground({ silent: false, landscape: false, printBackground });
     } finally {
       if (injectedImg && injectedImg.parentElement) injectedImg.parentElement.removeChild(injectedImg);
       if (!prev) setShowBackground(false);
@@ -228,6 +235,23 @@ const FormEditorVisual: React.FC = () => {
             <span className="toggle-label">Mostrar imagen de fondo</span>
           </label>
 
+          <label className="toggle-switch" title="Desactivar para impresoras matriciales (solo imprime texto y bordes)">
+            <input 
+              type="checkbox"
+              checked={printBackground}
+              onChange={(e) => {
+                const v = e.target.checked;
+                setPrintBackground(v);
+                if (template) {
+                  const user = JSON.parse(localStorage.getItem('user') || '{}');
+                  if (user?.id) window.electronAPI.updateFormTemplate(template.id, user.id, { printBackground: v });
+                }
+              }}
+            />
+            <span className="toggle-slider"></span>
+            <span className="toggle-label">Imprimir fondo</span>
+          </label>
+
           <label className="toggle-switch">
             <input 
               type="checkbox"
@@ -276,6 +300,8 @@ const FormEditorVisual: React.FC = () => {
         <FormRenderer 
           template={template}
           showBackground={showBackground}
+          values={fieldValues}
+          onValueChange={(fieldId, value) => setFieldValues(prev => ({ ...prev, [fieldId]: value }))}
           onElementClick={handleElementClick}
           selectedElement={selectedElement}
           onPositionChange={handlePositionChange}

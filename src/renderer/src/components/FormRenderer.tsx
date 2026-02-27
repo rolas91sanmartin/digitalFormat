@@ -149,12 +149,11 @@ const FormRenderer: React.FC<FormRendererProps> = ({
                 type="checkbox"
                 checked={values[field.id] || false}
                 onChange={(e) => onValueChange?.(field.id, e.target.checked)}
-                disabled={isDragMode}
+                onMouseDown={(e) => e.stopPropagation()}
                 style={{
                   width: '20px',
                   height: '20px',
-                  cursor: isDragMode ? 'grab' : 'pointer',
-                  pointerEvents: isDragMode ? 'none' : 'auto'
+                  cursor: 'pointer'
                 }}
               />
             ) : field.type === 'textarea' ? (
@@ -162,7 +161,7 @@ const FormRenderer: React.FC<FormRendererProps> = ({
                 value={values[field.id] || ''}
                 onChange={(e) => onValueChange?.(field.id, e.target.value)}
                 placeholder={field.placeholder}
-                disabled={isDragMode}
+                onMouseDown={(e) => e.stopPropagation()}
                 style={{
                   width: '100%',
                   height: '100%',
@@ -173,8 +172,7 @@ const FormRenderer: React.FC<FormRendererProps> = ({
                     ? `${field.style.borderWidth}px ${field.style.borderStyle || 'solid'} ${field.style.borderColor || '#000000'}`
                     : '1px solid #ccc',
                   padding: `${field.style?.padding || 4}px`,
-                  resize: 'none',
-                  pointerEvents: isDragMode ? 'none' : 'auto'
+                  resize: 'none'
                 }}
               />
             ) : (
@@ -183,7 +181,7 @@ const FormRenderer: React.FC<FormRendererProps> = ({
                 value={values[field.id] || ''}
                 onChange={(e) => onValueChange?.(field.id, e.target.value)}
                 placeholder={field.placeholder}
-                disabled={isDragMode}
+                onMouseDown={(e) => e.stopPropagation()}
                 style={{
                   width: '100%',
                   height: '100%',
@@ -194,8 +192,7 @@ const FormRenderer: React.FC<FormRendererProps> = ({
                     ? `${field.style.borderWidth}px ${field.style.borderStyle || 'solid'} ${field.style.borderColor || '#000000'}`
                     : '1px solid #ccc',
                   padding: `${field.style?.padding || 4}px`,
-                  textAlign: (field.style?.textAlign as any) || 'left',
-                  pointerEvents: isDragMode ? 'none' : 'auto'
+                  textAlign: (field.style?.textAlign as any) || 'left'
                 }}
               />
             )}
@@ -257,7 +254,7 @@ const FormRenderer: React.FC<FormRendererProps> = ({
                 type={field.type}
                 value={values[field.id] || ''}
                 onChange={(e) => onValueChange?.(field.id, e.target.value)}
-                disabled={isDragMode}
+                onMouseDown={(e) => e.stopPropagation()}
                 placeholder={field.label}
                 style={{
                   width: '100%',
@@ -266,8 +263,7 @@ const FormRenderer: React.FC<FormRendererProps> = ({
                   outline: 'none',
                   padding: '4px',
                   fontSize: `${table.style?.fontSize || 11}px`,
-                  fontFamily: table.style?.fontFamily || 'Arial',
-                  pointerEvents: isDragMode ? 'none' : 'auto'
+                  fontFamily: table.style?.fontFamily || 'Arial'
                 }}
               />
             </div>

@@ -101,6 +101,9 @@ export interface FormTemplate {
   // Configuración de renderizado
   renderMode: 'hybrid' | 'html-only' | 'image-overlay'; // hybrid, html-only, image-overlay
   
+  // Imprimir imagen de fondo (false = impresoras matriciales, solo texto/bordes)
+  printBackground?: boolean;
+
   // Configuración de API y numeración
   apiConfiguration?: ApiConfiguration;
   numerationConfig?: NumerationConfig;

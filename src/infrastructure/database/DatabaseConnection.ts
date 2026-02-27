@@ -184,6 +184,11 @@ export class DatabaseConnection {
         db.exec(`ALTER TABLE form_templates ADD COLUMN tableMappings TEXT`);
       }
 
+      if (!columnNames.includes('printBackground')) {
+        console.log('Migrando: Agregando columna printBackground...');
+        db.exec(`ALTER TABLE form_templates ADD COLUMN printBackground INTEGER DEFAULT 1`);
+      }
+
       console.log('✅ Migraciones completadas exitosamente');
     } catch (error) {
       console.error('Error durante las migraciones:', error);

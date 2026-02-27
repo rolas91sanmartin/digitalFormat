@@ -361,6 +361,12 @@
 
 /* Estilos de impresión para formato Carta (Letter) */
 @media print {
+  /* Sin imagen de fondo cuando "Imprimir fondo" está desactivado (impresoras matriciales) */
+  body.print-no-background .form-canvas > img[alt="Formulario"] {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
   @page {
     size: letter;
     margin: 0;

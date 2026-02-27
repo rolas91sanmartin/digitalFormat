@@ -94,6 +94,7 @@ const FormEditor: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [printing, setPrinting] = useState(false);
+  const [printBackground, setPrintBackground] = useState(true); // Desactivar para impresoras matriciales
   const canvasRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0.8);
   
@@ -356,6 +357,7 @@ const FormEditor: React.FC = () => {
           </div>
         );
 
+      case 'toggle':
       case 'switch':
         const isOn = value === true;
         return (
@@ -1202,6 +1204,11 @@ const FormEditor: React.FC = () => {
     }
   }, [saving, printing, isDragMode]);
 
+  // Sincronizar opción "Imprimir fondo" con la plantilla (cargada o importada)
+  useEffect(() => {
+    if (template) setPrintBackground(template.printBackground !== false);
+  }, [template?.id]);
+
   const handleZoomIn = () => {
     setScale((prev) => Math.min(prev + 0.1, 2)); // Máximo 200%
   };
@@ -1884,11 +1891,18 @@ const FormEditor: React.FC = () => {
         await new Promise(resolve => setTimeout(resolve, 100));
       }
       
-      // Imprimir la vista actual con fondo
+      // Imprimir la vista actual (printBackground: false para impresoras matriciales)
+      if (!printBackground) {
+        document.body.classList.add('print-no-background');
+      }
       const result = await window.electronAPI.printWithBackground({ 
         silent: false, 
-        landscape: false 
+        landscape: false,
+        printBackground 
       });
+      if (!printBackground) {
+        document.body.classList.remove('print-no-background');
+      }
       
       if (!result.success) {
         setNotification({ message: `Error al imprimir: ${result.error}`, type: 'error' });
@@ -1903,6 +1917,9 @@ const FormEditor: React.FC = () => {
     } catch (err: any) {
       setNotification({ message: `Error al imprimir: ${err.message}`, type: 'error' });
     } finally {
+      if (!printBackground) {
+        document.body.classList.remove('print-no-background');
+      }
       setPrinting(false);
     }
   };
@@ -2550,7 +2567,8 @@ const FormEditor: React.FC = () => {
           fields: allFields,
           tables: updatedTables,
           pageSize: template.pageSize,
-          customControls: customControls // Guardar controles avanzados
+          customControls: customControls,
+          printBackground
         }
       );
 
@@ -2643,6 +2661,20 @@ const FormEditor: React.FC = () => {
               onChange={(e) => setIsDragMode(e.target.checked)}
             />
             <span>🖱️ Modo Configuración</span>
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginRight: '1rem', cursor: 'pointer' }} title="Desactivar para impresoras matriciales (solo imprime texto y bordes)">
+            <input 
+              type="checkbox"
+              checked={printBackground}
+              onChange={(e) => {
+                const v = e.target.checked;
+                setPrintBackground(v);
+                if (template && user) {
+                  window.electronAPI.updateFormTemplate(template.id, user.id, { printBackground: v });
+                }
+              }}
+            />
+            <span>🖨️ Imprimir fondo</span>
           </label>
           <button className="btn btn-secondary" onClick={handleClear}>
             🗑️ Limpiar
@@ -3630,6 +3662,7 @@ const FormEditor: React.FC = () => {
                   isPlaceholder ? 'field-placeholder' : ''
                 ].filter(Boolean).join(' ');
                 
+                const isFolioFieldCanvas = template.numerationConfig?.enabled && template.numerationConfig.fieldId === field.id;
                 return (
                   <div
                     key={field.id}
@@ -3644,19 +3677,85 @@ const FormEditor: React.FC = () => {
                       color: field.color || '#000000',
                       cursor: isDragMode ? 'grab' : 'default',
                       userSelect: isDragMode ? 'none' : 'auto',
-                      border: isDragMode ? '1px dashed rgba(102, 126, 234, 0.5)' : 'none',
+                      border: isDragMode ? '1px dashed rgba(102, 126, 234, 0.5)' : '1px solid transparent',
                       backgroundColor: isDragMode ? 'rgba(102, 126, 234, 0.1)' : 'transparent',
                       transition: 'background-color 0.2s, border 0.2s',
                       position: 'absolute'
                     }}
                     onMouseDown={(e) => {
                       const target = e.target as HTMLElement;
+                      if (!isDragMode && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'LABEL')) {
+                        return;
+                      }
                       if (!target.classList.contains('resize-handle')) {
                         handleMouseDown(e, 'field', field.id, field.position.x, field.position.y);
                       }
                     }}
                   >
-                    {field.type === 'checkbox' ? (
+                    {!isDragMode ? (
+                      field.type === 'checkbox' ? (
+                        <label style={{ margin: 0, width: '100%', height: '100%', display: 'flex', alignItems: 'center', cursor: isFolioFieldCanvas ? 'not-allowed' : 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={!!value}
+                            onChange={(e) => !isFolioFieldCanvas && handleFieldChange(field.id, e.target.checked)}
+                            disabled={isFolioFieldCanvas}
+                            readOnly={isFolioFieldCanvas}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onClick={(e) => e.stopPropagation()}
+                            style={{ width: '18px', height: '18px', cursor: isFolioFieldCanvas ? 'not-allowed' : 'pointer' }}
+                          />
+                        </label>
+                      ) : field.type === 'textarea' ? (
+                        <textarea
+                          value={value || ''}
+                          onChange={(e) => !isFolioFieldCanvas && handleFieldChange(field.id, e.target.value)}
+                          disabled={isFolioFieldCanvas}
+                          readOnly={isFolioFieldCanvas}
+                          placeholder={field.placeholder}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            margin: 0,
+                            padding: '2px 4px',
+                            fontSize: `${field.fontSize || 12}px`,
+                            fontFamily: field.fontFamily || 'Arial',
+                            color: field.color || '#000000',
+                            border: 'none',
+                            outline: 'none',
+                            resize: 'none',
+                            backgroundColor: isFolioFieldCanvas ? '#f0f9ff' : 'transparent',
+                            boxSizing: 'border-box'
+                          }}
+                        />
+                      ) : (
+                        <input
+                          type={field.type}
+                          value={value || ''}
+                          onChange={(e) => !isFolioFieldCanvas && handleFieldChange(field.id, e.target.value)}
+                          disabled={isFolioFieldCanvas}
+                          readOnly={isFolioFieldCanvas}
+                          placeholder={field.placeholder}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            margin: 0,
+                            padding: '2px 4px',
+                            fontSize: `${field.fontSize || 12}px`,
+                            fontFamily: field.fontFamily || 'Arial',
+                            color: field.color || '#000000',
+                            border: 'none',
+                            outline: 'none',
+                            backgroundColor: isFolioFieldCanvas ? '#f0f9ff' : 'transparent',
+                            boxSizing: 'border-box'
+                          }}
+                        />
+                      )
+                    ) : field.type === 'checkbox' ? (
                       value ? '☑' : '☐'
                     ) : (
                       value || ''
@@ -3932,14 +4031,36 @@ const FormEditor: React.FC = () => {
                           transition: 'outline 0.2s, border-color 0.2s, background-color 0.2s'
                         }}
                         onMouseDown={(e) => {
-                          if (!isDragMode) return;
                           const target = e.target as HTMLElement;
+                          if (!isDragMode && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')) return;
                           if (!target.classList.contains('resize-handle')) {
                             handleMouseDown(e, 'cell', cellId, cellPos.x, cellPos.y);
                           }
                         }}
                       >
-                        {row[col.id] || ''}
+                        {!isDragMode ? (
+                          <input
+                            type={col.type === 'number' ? 'number' : col.type === 'date' ? 'date' : 'text'}
+                            value={row[col.id] ?? ''}
+                            onChange={(e) => handleTableCellChange(table.id, rowIdx, col.id, e.target.value)}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onClick={(e) => e.stopPropagation()}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              margin: 0,
+                              padding: '2px 4px',
+                              border: 'none',
+                              outline: 'none',
+                              fontSize: `${table.style?.fontSize || 11}px`,
+                              fontFamily: table.style?.fontFamily || 'Arial',
+                              backgroundColor: 'transparent',
+                              boxSizing: 'border-box'
+                            }}
+                          />
+                        ) : (
+                          (row[col.id] || '')
+                        )}
                         
                         {/* Resize handles solo en modo drag */}
                         {isDragMode && (
@@ -4075,12 +4196,70 @@ const FormEditor: React.FC = () => {
                     }}
                     onMouseDown={(e) => {
                       const target = e.target as HTMLElement;
+                      if (!isDragMode && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'LABEL')) return;
                       if (!target.classList.contains('resize-handle') && !target.classList.contains('delete-field-btn')) {
                         handleMouseDown(e, 'custom', field.id, field.position.x, field.position.y);
                       }
                     }}
                   >
-                    {value ? (
+                    {!isDragMode ? (
+                      field.type === 'checkbox' ? (
+                        <label style={{ margin: 0, width: '100%', height: '100%', display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={!!value}
+                            onChange={(e) => handleFieldChange(field.id, e.target.checked)}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onClick={(e) => e.stopPropagation()}
+                            style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                          />
+                        </label>
+                      ) : field.type === 'textarea' ? (
+                        <textarea
+                          value={value || ''}
+                          onChange={(e) => handleFieldChange(field.id, e.target.value)}
+                          placeholder={field.placeholder}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            margin: 0,
+                            padding: '2px 4px',
+                            fontSize: `${field.fontSize || field.style?.fontSize || 12}px`,
+                            fontFamily: field.fontFamily || field.style?.fontFamily || 'Arial',
+                            color: field.color || field.style?.color || '#000000',
+                            border: 'none',
+                            outline: 'none',
+                            resize: 'none',
+                            backgroundColor: 'transparent',
+                            boxSizing: 'border-box'
+                          }}
+                        />
+                      ) : (
+                        <input
+                          type={field.type}
+                          value={value ?? ''}
+                          onChange={(e) => handleFieldChange(field.id, e.target.value)}
+                          placeholder={field.placeholder}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            margin: 0,
+                            padding: '2px 4px',
+                            fontSize: `${field.fontSize || field.style?.fontSize || 12}px`,
+                            fontFamily: field.fontFamily || field.style?.fontFamily || 'Arial',
+                            color: field.color || field.style?.color || '#000000',
+                            border: 'none',
+                            outline: 'none',
+                            backgroundColor: 'transparent',
+                            boxSizing: 'border-box'
+                          }}
+                        />
+                      )
+                    ) : value ? (
                       <span style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
                         {field.prefix && <span>{field.prefix}</span>}
                         <span>
@@ -4228,9 +4407,11 @@ const FormEditor: React.FC = () => {
                       }
                     }}
                   >
-                    {renderCustomControl(control, controlValues[control.id], (value) => {
-                      setControlValues(prev => ({ ...prev, [control.id]: value }));
-                    })}
+                    <div style={{ width: '100%', height: '100%', minHeight: 0 }} onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+                      {renderCustomControl(control, controlValues[control.id], (value) => {
+                        setControlValues(prev => ({ ...prev, [control.id]: value }));
+                      })}
+                    </div>
                     
                     {/* Handles de resize y editar/eliminar solo en modo drag */}
                     {isDragMode && (

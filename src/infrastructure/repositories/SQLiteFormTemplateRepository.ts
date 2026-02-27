@@ -15,9 +15,9 @@ export class SQLiteFormTemplateRepository implements IFormTemplateRepository {
         id, name, description, userId, backgroundImage, 
         staticElements, fields, tables, renderMode,
         pageWidth, pageHeight, apiConfiguration, numerationConfig, fieldMappings, tableMappings,
-        customControls, createdAt, updatedAt
+        customControls, printBackground, createdAt, updatedAt
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -37,6 +37,7 @@ export class SQLiteFormTemplateRepository implements IFormTemplateRepository {
       templateData.fieldMappings ? JSON.stringify(templateData.fieldMappings) : null,
       templateData.tableMappings ? JSON.stringify(templateData.tableMappings) : null,
       (templateData as any).customControls ? JSON.stringify((templateData as any).customControls) : null,
+      templateData.printBackground !== false ? 1 : 0,
       now,
       now
     );
@@ -75,6 +76,7 @@ export class SQLiteFormTemplateRepository implements IFormTemplateRepository {
         width: row.pageWidth,
         height: row.pageHeight
       },
+      printBackground: row.printBackground === undefined || row.printBackground === null ? true : !!row.printBackground,
       apiConfiguration: row.apiConfiguration ? JSON.parse(row.apiConfiguration) : undefined,
       numerationConfig: row.numerationConfig ? JSON.parse(row.numerationConfig) : undefined,
       fieldMappings: row.fieldMappings ? JSON.parse(row.fieldMappings) : undefined,
@@ -103,6 +105,7 @@ export class SQLiteFormTemplateRepository implements IFormTemplateRepository {
         width: row.pageWidth,
         height: row.pageHeight
       },
+      printBackground: row.printBackground === undefined || row.printBackground === null ? true : !!row.printBackground,
       apiConfiguration: row.apiConfiguration ? JSON.parse(row.apiConfiguration) : undefined,
       numerationConfig: row.numerationConfig ? JSON.parse(row.numerationConfig) : undefined,
       fieldMappings: row.fieldMappings ? JSON.parse(row.fieldMappings) : undefined,
@@ -170,6 +173,10 @@ export class SQLiteFormTemplateRepository implements IFormTemplateRepository {
     if ((templateData as any).customControls !== undefined) {
       updates.push('customControls = ?');
       values.push((templateData as any).customControls ? JSON.stringify((templateData as any).customControls) : null);
+    }
+    if (templateData.printBackground !== undefined) {
+      updates.push('printBackground = ?');
+      values.push(templateData.printBackground ? 1 : 0);
     }
 
     updates.push('updatedAt = ?');

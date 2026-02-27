@@ -185,12 +185,12 @@ const Dashboard: React.FC = () => {
           staticElements: template.staticElements || [],
           pageSize: template.pageSize || { width: 794, height: 1123 },
           renderMode: template.renderMode || 'hybrid',
-          // ⭐ CONFIGURACIONES COMPLETAS
+          printBackground: template.printBackground !== false,
           apiConfiguration: template.apiConfiguration || null,
           numerationConfig: template.numerationConfig || null,
           fieldMappings: template.fieldMappings || [],
           tableMappings: template.tableMappings || [],
-          customControls: (template as any).customControls || [] // Controles avanzados
+          customControls: (template as any).customControls || []
         }
       };
 

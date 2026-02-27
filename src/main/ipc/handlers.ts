@@ -248,12 +248,12 @@ export function setupIpcHandlers() {
         staticElements: data.templateData.staticElements || [],
         pageSize: data.templateData.pageSize || { width: 794, height: 1123 },
         renderMode: data.templateData.renderMode || 'hybrid' as 'hybrid' | 'html-only' | 'image-overlay',
-        // ⭐ INCLUIR TODAS LAS CONFIGURACIONES
+        printBackground: data.templateData.printBackground !== false,
         apiConfiguration: data.templateData.apiConfiguration || undefined,
         numerationConfig: data.templateData.numerationConfig || undefined,
         fieldMappings: data.templateData.fieldMappings || [],
         tableMappings: data.templateData.tableMappings || [],
-        customControls: data.templateData.customControls || [] // Controles avanzados
+        customControls: data.templateData.customControls || []
       };
 
       const template = await formTemplateRepository.create(templateData);
