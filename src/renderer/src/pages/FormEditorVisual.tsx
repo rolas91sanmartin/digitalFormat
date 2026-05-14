@@ -11,6 +11,10 @@ declare global {
   }
 }
 
+const PRINT_DPI = 96;
+const CM_PER_INCH = 2.54;
+const pxToCm = (px: number): number => px / PRINT_DPI * CM_PER_INCH;
+
 const FormEditorVisual: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -174,8 +178,16 @@ const FormEditorVisual: React.FC = () => {
     }
     await new Promise(resolve => setTimeout(resolve, 100));
     try {
+      const widthCm = pxToCm(template.pageSize.width);
+      const heightCm = pxToCm(template.pageSize.height);
+      const printPageStyle = document.createElement('style');
+      printPageStyle.id = 'print-page-size-cm';
+      printPageStyle.textContent = `@media print { @page { size: ${widthCm.toFixed(2)}cm ${heightCm.toFixed(2)}cm; margin: 0; marks: none; } }`;
+      document.head.appendChild(printPageStyle);
       await window.electronAPI.printWithBackground({ silent: false, landscape: false, printBackground });
+      document.getElementById('print-page-size-cm')?.remove();
     } finally {
+      document.getElementById('print-page-size-cm')?.remove();
       if (injectedImg && injectedImg.parentElement) injectedImg.parentElement.removeChild(injectedImg);
       if (!prev) setShowBackground(false);
     }

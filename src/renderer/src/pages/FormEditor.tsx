@@ -84,6 +84,12 @@ interface FormTemplate {
   customControls?: CustomControl[];
 }
 
+// Conversión píxeles ↔ cm para impresión (96 DPI estándar pantalla; impresora usará @page size en cm)
+const PRINT_DPI = 96;
+const CM_PER_INCH = 2.54;
+const pxToCm = (px: number): number => px / PRINT_DPI * CM_PER_INCH;
+const cmToPx = (cm: number): number => Math.round(cm / CM_PER_INCH * PRINT_DPI);
+
 const FormEditor: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
@@ -95,6 +101,8 @@ const FormEditor: React.FC = () => {
   const [error, setError] = useState('');
   const [printing, setPrinting] = useState(false);
   const [printBackground, setPrintBackground] = useState(true); // Desactivar para impresoras matriciales
+  const [isToolbarCollapsed, setIsToolbarCollapsed] = useState(false);
+  const [isSidebarHidden, setIsSidebarHidden] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0.8);
   
@@ -1895,11 +1903,18 @@ const FormEditor: React.FC = () => {
       if (!printBackground) {
         document.body.classList.add('print-no-background');
       }
+      const widthCm = pxToCm(template.pageSize.width);
+      const heightCm = pxToCm(template.pageSize.height);
+      const printPageStyle = document.createElement('style');
+      printPageStyle.id = 'print-page-size-cm';
+      printPageStyle.textContent = `@media print { @page { size: ${widthCm.toFixed(2)}cm ${heightCm.toFixed(2)}cm; margin: 0; marks: none; } }`;
+      document.head.appendChild(printPageStyle);
       const result = await window.electronAPI.printWithBackground({ 
         silent: false, 
         landscape: false,
         printBackground 
       });
+      document.getElementById('print-page-size-cm')?.remove();
       if (!printBackground) {
         document.body.classList.remove('print-no-background');
       }
@@ -1917,6 +1932,7 @@ const FormEditor: React.FC = () => {
     } catch (err: any) {
       setNotification({ message: `Error al imprimir: ${err.message}`, type: 'error' });
     } finally {
+      document.getElementById('print-page-size-cm')?.remove();
       if (!printBackground) {
         document.body.classList.remove('print-no-background');
       }
@@ -2629,8 +2645,7 @@ const FormEditor: React.FC = () => {
           .control-button,
           .control-toggle,
           .control-file,
-          .control-signature,
-          .field-checkbox {
+          .control-signature {
             display: none !important;
           }
           
@@ -2648,13 +2663,35 @@ const FormEditor: React.FC = () => {
       `}</style>
       
       <div className="form-editor-container">
-        <div className="editor-header">
+        <div className={`editor-header ${isToolbarCollapsed ? 'editor-header-collapsed' : ''}`}>
           <button className="btn btn-secondary" onClick={() => navigate('/dashboard')}>
             ← Volver
           </button>
-          <h1>{template.name}</h1>
+          <div className="editor-title-block">
+            <span className="editor-kicker">Editor de formato</span>
+            <h1>{template.name}</h1>
+          </div>
+          <div className="editor-header-tools">
+            <button
+              className="editor-icon-button"
+              onClick={() => setIsToolbarCollapsed((value) => !value)}
+              title={isToolbarCollapsed ? 'Mostrar herramientas' : 'Contraer herramientas'}
+            >
+              <span aria-hidden="true">{isToolbarCollapsed ? '+' : '-'}</span>
+              <span>{isToolbarCollapsed ? 'Mostrar' : 'Contraer'}</span>
+            </button>
+            <button
+              className="editor-icon-button"
+              onClick={() => setIsSidebarHidden((value) => !value)}
+              title={isSidebarHidden ? 'Mostrar campos' : 'Ocultar campos'}
+            >
+              <span aria-hidden="true">{isSidebarHidden ? '>' : '<'}</span>
+              <span>{isSidebarHidden ? 'Campos' : 'Ocultar'}</span>
+            </button>
+          </div>
+          {!isToolbarCollapsed && (
           <div className="editor-actions">
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginRight: '1rem', cursor: 'pointer' }}>
+          <label className="editor-toggle-control" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginRight: '1rem', cursor: 'pointer' }}>
             <input 
               type="checkbox"
               checked={isDragMode}
@@ -2662,7 +2699,7 @@ const FormEditor: React.FC = () => {
             />
             <span>🖱️ Modo Configuración</span>
           </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginRight: '1rem', cursor: 'pointer' }} title="Desactivar para impresoras matriciales (solo imprime texto y bordes)">
+          <label className="editor-toggle-control" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginRight: '1rem', cursor: 'pointer' }} title="Desactivar para impresoras matriciales (solo imprime texto y bordes)">
             <input 
               type="checkbox"
               checked={printBackground}
@@ -2676,25 +2713,99 @@ const FormEditor: React.FC = () => {
             />
             <span>🖨️ Imprimir fondo</span>
           </label>
-          <button className="btn btn-secondary" onClick={handleClear}>
+          <span className="editor-size-field" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginRight: '0.5rem', fontSize: '0.9rem' }} title="Tamaño de página para que la impresión coincida con el papel (impresoras matriciales)">
+            <label style={{ whiteSpace: 'nowrap' }}>Ancho</label>
+            <input
+              type="number"
+              min={5}
+              max={50}
+              step={0.1}
+              value={template ? pxToCm(template.pageSize.width).toFixed(1) : ''}
+              onChange={(e) => {
+                const cm = parseFloat(e.target.value);
+                if (!template || isNaN(cm) || cm < 5 || cm > 50) return;
+                const widthPx = cmToPx(cm);
+                const newPageSize = { ...template.pageSize, width: widthPx };
+                setTemplate({ ...template, pageSize: newPageSize });
+                if (user) window.electronAPI.updateFormTemplate(template.id, user.id, { pageSize: newPageSize });
+              }}
+              onBlur={(e) => {
+                const cm = parseFloat(e.target.value);
+                if (!template || isNaN(cm) || cm < 5 || cm > 50) return;
+                const widthPx = cmToPx(cm);
+                const newPageSize = { ...template.pageSize, width: widthPx };
+                if (user) window.electronAPI.updateFormTemplate(template.id, user.id, { pageSize: newPageSize });
+              }}
+              style={{ width: '52px', padding: '2px 4px' }}
+            />
+            <span>cm</span>
+          </span>
+          <span className="editor-size-field" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginRight: '1rem', fontSize: '0.9rem' }}>
+            <label style={{ whiteSpace: 'nowrap' }}>Alto</label>
+            <input
+              type="number"
+              min={5}
+              max={100}
+              step={0.1}
+              value={template ? pxToCm(template.pageSize.height).toFixed(1) : ''}
+              onChange={(e) => {
+                const cm = parseFloat(e.target.value);
+                if (!template || isNaN(cm) || cm < 5 || cm > 100) return;
+                const heightPx = cmToPx(cm);
+                const newPageSize = { ...template.pageSize, height: heightPx };
+                setTemplate({ ...template, pageSize: newPageSize });
+                if (user) window.electronAPI.updateFormTemplate(template.id, user.id, { pageSize: newPageSize });
+              }}
+              onBlur={(e) => {
+                const cm = parseFloat(e.target.value);
+                if (!template || isNaN(cm) || cm < 5 || cm > 100) return;
+                const heightPx = cmToPx(cm);
+                const newPageSize = { ...template.pageSize, height: heightPx };
+                if (user) window.electronAPI.updateFormTemplate(template.id, user.id, { pageSize: newPageSize });
+              }}
+              style={{ width: '52px', padding: '2px 4px' }}
+            />
+            <span>cm</span>
+          </span>
+          <button className="btn btn-secondary editor-action-button" onClick={handleClear}>
             🗑️ Limpiar
           </button>
-          <button className="btn btn-success" onClick={handleSave} disabled={saving}>
+          <button className="btn btn-success editor-action-button editor-save-button" onClick={handleSave} disabled={saving}>
             {saving ? '⏳ Guardando...' : '💾 Guardar Posiciones'}
           </button>
-          <button className="btn btn-success" onClick={handlePrint} disabled={printing}>
+          <button className="btn btn-success editor-action-button editor-print-button" onClick={handlePrint} disabled={printing}>
             {printing ? '⏳ Imprimiendo...' : '🖨️ Imprimir'}
           </button>
+          </div>
+          )}
         </div>
-      </div>
-
-      <div className="editor-content">
+      <div className={`editor-content ${isSidebarHidden ? 'sidebar-hidden' : ''}`}>
+        {isSidebarHidden && (
+          <button
+            className="sidebar-restore-button"
+            onClick={() => setIsSidebarHidden(false)}
+            title="Mostrar campos del formulario"
+          >
+            <span aria-hidden="true">&gt;</span>
+            <span>Campos</span>
+          </button>
+        )}
+        {!isSidebarHidden && (
         <div 
           className="editor-sidebar"
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
-          <h2>Campos del Formulario</h2>
+          <div className="editor-sidebar-header">
+            <h2>Campos del Formulario</h2>
+            <button
+              className="editor-icon-button sidebar-hide-button"
+              onClick={() => setIsSidebarHidden(true)}
+              title="Ocultar panel de campos"
+            >
+              <span aria-hidden="true">&lt;</span>
+            </button>
+          </div>
           
           {/* Botón para agregar campos personalizados */}
           <button 
@@ -3580,10 +3691,11 @@ const FormEditor: React.FC = () => {
             )}
           </div>
         </div>
+        )}
 
         <div className="editor-preview">
           <div className="preview-header">
-            <h2>Vista Previa - Formato A4</h2>
+            <h2>Vista Previa</h2>
             <div className="zoom-controls">
               <button 
                 className="zoom-btn" 
@@ -3646,14 +3758,14 @@ const FormEditor: React.FC = () => {
                 
                 const value = fieldValues[field.id];
                 const cleanValue = value ? String(value).trim().toLowerCase() : '';
-                const isPlaceholder = !value || [
+                const isPlaceholder = field.type !== 'checkbox' && (!value || [
                   'escribe aquí...',
                   'escribe aquí',
                   'escribe aqui...',
                   'escribe aqui',
                   '(se generará al imprimir)',
                   'se generará al imprimir'
-                ].includes(cleanValue);
+                ].includes(cleanValue));
                 
                 // Agregar clase para checkboxes y placeholders
                 const fieldClasses = [
@@ -4587,6 +4699,7 @@ const FormEditor: React.FC = () => {
           </div>
         </div>
       </div>
+      </div>
 
       {/* Mensaje informativo del modo drag */}
       {isDragMode && (
@@ -5140,10 +5253,8 @@ const FormEditor: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
     </>
   );
 };
 
 export default FormEditor;
-
